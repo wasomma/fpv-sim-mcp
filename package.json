@@ -28,7 +28,8 @@
     "test": "tsc && node --test \"dist/test/*.test.js\"",
     "demo": "tsc && node dist/examples/demo.js",
     "goldens": "node scripts/generate-goldens.mjs",
-    "start": "node dist/src/server/index.js"
+    "start": "node dist/src/server/index.js",
+    "start:http": "node dist/src/server/http.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
