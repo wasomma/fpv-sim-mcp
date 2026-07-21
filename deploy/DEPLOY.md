@@ -65,7 +65,18 @@ curl -s localhost:8080/healthz      # expect {"ok":true,...}
 sudo apt install -y caddy
 ```
 
-`/etc/caddy/Caddyfile`:
+**If apt says Caddy is already installed, stop and look before touching its
+config** — an existing Caddy is almost certainly already serving something,
+and its Caddyfile is that service's only route to the internet. Check first:
+
+```sh
+cat /etc/caddy/Caddyfile
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak   # cheap insurance either way
+```
+
+Then **append** this server's site block to `/etc/caddy/Caddyfile`, keeping
+any existing blocks — Caddy routes each request by hostname, so sites coexist
+freely:
 
 ```
 mcp.example.com {
