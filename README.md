@@ -60,6 +60,29 @@ Add to `claude_desktop_config.json`:
 
 (On Windows use a path like `C:\\path\\to\\fpv-sim-mcp\\dist\\src\\server\\index.js`.)
 
+### Remote (no local install)
+
+The server also ships a **Streamable HTTP** entry point
+(`dist/src/server/http.js`) for hosting on any box with Node 20+ —
+[deploy/DEPLOY.md](deploy/DEPLOY.md) is a complete VPS runbook (systemd,
+Caddy TLS, bearer-token auth).
+
+A hosted demo instance runs at `https://wasomma-fpv.duckdns.org/mcp`
+(health probe at [/healthz](https://wasomma-fpv.duckdns.org/healthz)). It is
+bearer-token protected — it exposes CPU, not secrets, but an open sim
+endpoint invites abuse. If you'd like to try it without building anything,
+ask me for a token ([GitHub](https://github.com/wasomma) /
+[LinkedIn](https://www.linkedin.com/in/wesleyfine/)), then:
+
+```sh
+claude mcp add --transport http fpv-sim https://wasomma-fpv.duckdns.org/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Determinism makes the hosted instance verifiable: `run_engagement(20260719)`
+returns the same BLUFOR victory at T+311.1s from the cloud that the local
+build produces — same seed, same engagement, any machine.
+
 ## Tools
 
 | Tool | What it does |
@@ -131,10 +154,13 @@ read `describe_model` and report what the simulation *cannot* claim.
 
 ```
 src/engine/    headless simulation engine (port of fpv-sim's index.html)
-src/server/    MCP server: five tools, two resources, zod validation
+src/server/    MCP server: five tools, two resources, zod validation;
+               build.ts is shared by the stdio (index.ts) and
+               Streamable HTTP (http.ts) entry points
 test/          golden-master parity + unit tests (npm test)
 examples/      demo MCP client (npm run demo)
 scripts/       golden-fixture generator (needs ../fpv-sim checkout)
+deploy/        VPS runbook + hardened systemd unit for remote hosting
 docs/upstream/ pinned snapshot of the original DESIGN_NOTES.md
 ```
 
