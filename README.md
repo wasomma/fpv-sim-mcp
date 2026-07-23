@@ -132,6 +132,16 @@ reproduce them with `npm run demo` or the same tool calls):
 That last sentence is the point of the whole exercise: the agent can also
 read `describe_model` and report what the simulation *cannot* claim.
 
+**Postscript — one claim above didn't survive a bigger experiment.** The
+agent's parting guess that "the residual BLUFOR edge is its 6-second
+earlier launch" was later tested directly: a 2,000-pair study run on this
+engine ([fpv-sim's MONTE_CARLO.md](https://github.com/wasomma/fpv-sim/blob/main/MONTE_CARLO.md),
+experiment E2c) equalized the launch times and found the stagger moves
+every outcome rate by less than half a point — a non-factor. EMCON posture
+explains essentially the whole gap. The transcript stands as written
+because that is how this is supposed to work: a deterministic, citable
+claim was cheap to re-test at 10× the sample size, and it lost.
+
 ## Determinism and provenance
 
 - **Same seed, same engagement.** All randomness draws from one seeded
