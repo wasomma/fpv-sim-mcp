@@ -10,6 +10,13 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+### Changed
+- **Relicensed from MIT to PolyForm Strict License 1.0.0**
+  ([LICENSE.md](LICENSE.md)): the repository stays public to read and
+  use noncommercially, but is no longer open source — no modification,
+  redistribution, or commercial use. Copies obtained under MIT before
+  this change retain their MIT rights.
+
 ## [0.2.0] — 2026-07-23
 
 ### Added

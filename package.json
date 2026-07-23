@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "MCP server exposing the fpv-sim force-on-force sUAS/cUAS engagement simulation as agent-callable tools. Notional data only.",
   "type": "module",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.md",
   "author": "wasomma <wasomma@gmail.com>",
   "repository": {
     "type": "git",
