@@ -176,4 +176,10 @@ docs/upstream/ pinned snapshot of the original DESIGN_NOTES.md
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This repository is public for demonstration, not open source. Licensed under
+the [PolyForm Strict License 1.0.0](LICENSE.md): you may read the code and use
+it for noncommercial purposes, but no rights are granted to modify,
+redistribute, or use it commercially. (Connecting an agent to the hosted MCP
+endpoint is exactly the intended use.)
+
+Required Notice: Copyright © 2026 Wesley Fine (https://github.com/wasomma)
