@@ -32,7 +32,8 @@ events, float-equal CEPs, no epsilons. Policy:
   Streamable HTTP `http.ts`, shared `build.ts`); `src/server/params.ts`
   is the single tunable-parameter table that generates BOTH input
   validation and `get_config_schema` (and fpv-sim's PARAMETERS.md).
-- `npm test` — build + 17 tests (golden parity, fix math, aggregation).
+- `npm test` — build + 18 tests (golden parity, fix math, aggregation,
+  reported version).
   Must pass on Node 20, the stated minimum — the test glob is deliberately
   unquoted so the shell expands it there.
 - `npm run demo` — exercises the server through a real MCP stdio client.
@@ -44,7 +45,13 @@ events, float-equal CEPs, no epsilons. Policy:
 ## Conventions
 
 - CHANGELOG.md (Keep a Changelog + semver) and `package.json` `version`
-  move together.
+  move together — bump with `npm version <x.y.z> --no-git-tag-version` so
+  `package-lock.json` follows. The server reads its reported version from
+  `package.json` at load (`SERVER_VERSION` in `build.ts`); never hardcode
+  the server's version anywhere else (the demo client's own `version` in
+  `examples/demo.ts` is a separate identity). Tag `vX.Y.Z` on the merge
+  commit and publish a GitHub release whose notes are that CHANGELOG
+  section.
 - Consumers to keep in mind: fpv-sim's `scripts/monte-carlo-study.mjs`
   and `scripts/generate-parameters-doc.mjs` import this package's built
   `dist/` from a sibling checkout — build breaks there usually mean a
@@ -54,5 +61,5 @@ events, float-equal CEPs, no epsilons. Policy:
 
 ## Open work
 
-Check the repo's open issues — outstanding owner actions (version
-tags/releases, hosted-demo redeploy) are tracked there.
+Check the repo's open issues — outstanding owner actions (e.g. the
+hosted-demo redeploy) are tracked there.

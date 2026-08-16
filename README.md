@@ -33,7 +33,7 @@ Requires Node 20+.
 git clone https://github.com/wasomma/fpv-sim-mcp.git
 cd fpv-sim-mcp
 npm install
-npm test        # builds and proves browser-parity + unit tests (17 tests)
+npm test        # builds and proves browser-parity + unit tests (18 tests)
 npm run demo    # exercises the server through a real MCP stdio client
 ```
 

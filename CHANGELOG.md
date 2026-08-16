@@ -10,12 +10,34 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-16
+
+No engine or tool behavior changes; golden fixtures unchanged.
+
 ### Changed
 - **Relicensed from MIT to PolyForm Strict License 1.0.0**
   ([LICENSE.md](LICENSE.md)): the repository stays public to read and
   use noncommercially, but is no longer open source — no modification,
   redistribution, or commercial use. Copies obtained under MIT before
   this change retain their MIT rights.
+
+### Fixed
+- The version the server reports (MCP `initialize` handshake, `/healthz`,
+  startup banner) is now read from `package.json` instead of a hardcoded
+  constant in `src/server/build.ts`, which had silently stayed at `0.1.0`
+  through the 0.2.0 release — so the hosted demo's `/healthz` could not
+  confirm a redeploy. `package-lock.json` had likewise never been bumped
+  past 0.1.0; `npm version` now keeps it in step. A new test
+  (`test/version.test.ts`) asserts the reported version equals
+  `package.json`'s.
+
+### Docs
+- `deploy/DEPLOY.md` "Updating" now ends with a `/healthz` version check —
+  the redeploy confirmation the fix above makes meaningful.
+- Release tags `v0.1.0` and `v0.2.0` now exist (published 2026-08-16),
+  so the compare links below use tag form. The `[0.2.0]` range
+  previously ended one merge early (at PR #3 rather than the PR #4 merge
+  that carried the version bump); corrected.
 
 ## [0.2.0] — 2026-07-23
 
@@ -59,6 +81,7 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
   (winner, both-drones-down, or 3600 s cap — the latter two reported as
   first-class `STALEMATE` outcomes) and flag timestamps for aggregation.
 
-[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/6a49d61...HEAD
-[0.2.0]: https://github.com/wasomma/fpv-sim-mcp/compare/50b02d3...6a49d61
-[0.1.0]: https://github.com/wasomma/fpv-sim-mcp/commits/50b02d3
+[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/wasomma/fpv-sim-mcp/releases/tag/v0.1.0

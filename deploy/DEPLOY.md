@@ -137,7 +137,14 @@ sudo -u fpvsim git pull
 sudo npm ci && sudo npm run build
 sudo chown -R fpvsim:fpvsim /opt/fpv-sim-mcp
 sudo systemctl restart fpv-sim-mcp
+curl -s localhost:8080/healthz      # "version" must now equal package.json's —
+                                    # proof the restart picked up the new build
 ```
+
+The server reads its reported version from `package.json` at startup, so
+`/healthz` (and the MCP `initialize` handshake) is the redeploy check. For a
+behavioral spot-check, `run_engagement(20260719)` should still return the
+BLUFOR victory at T+311.1 s — same seed, same engagement, any machine.
 
 ## Notes and limits
 
