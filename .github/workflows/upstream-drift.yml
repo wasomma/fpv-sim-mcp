@@ -33,19 +33,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: fpv-sim-mcp
 
       # The fixture generator resolves the spec at ../fpv-sim relative to
       # the repo root, so check upstream out as a sibling directory.
       - name: Check out upstream fpv-sim (live main)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: wasomma/fpv-sim
           path: fpv-sim
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
