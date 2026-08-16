@@ -10,6 +10,11 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-16
+
+No engine or tool behavior changes; golden fixtures unchanged. Dependency
+hygiene only.
+
 ### Security
 - `npm audit fix` (no `--force`): four transitive dependencies of
   `@modelcontextprotocol/sdk` bumped within their existing semver ranges
@@ -23,8 +28,8 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
   code paths are exercised by this server (it uses `node:http` directly
   and the SDK's Streamable HTTP transport, no CORS/static/proxy
   middleware), so this is hygiene, not a fix for an exposure. SDK stays
-  at 1.29.0; `package.json` unchanged; lockfile only. `npm audit` is
-  clean afterwards.
+  at 1.29.0; no dependency ranges changed. `npm audit` is clean
+  afterwards.
 
 ## [0.2.1] — 2026-08-16
 
@@ -97,7 +102,8 @@ No engine or tool behavior changes; golden fixtures unchanged.
   (winner, both-drones-down, or 3600 s cap — the latter two reported as
   first-class `STALEMATE` outcomes) and flag timestamps for aggregation.
 
-[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wasomma/fpv-sim-mcp/releases/tag/v0.1.0
