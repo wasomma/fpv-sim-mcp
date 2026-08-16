@@ -8,5 +8,9 @@ project. When a sibling checkout of the original repo exists
 
 - Source: https://github.com/wasomma/fpv-sim
 - File: `DESIGN_NOTES.md`
-- Commit: `0cb383c3647327bf3a07501870ba88823ec41170`
-- Copied: 2026-07-21
+- Commit: `74b161a72f842a047b51f8a9f58f34e4d21a425e`
+- Copied: 2026-08-16
+
+Note: this pin tracks the *design-notes* copy only. The golden fixtures'
+upstream pin lives in `test/fixtures/golden-seeds.json` `_meta.source_commit`
+and is unchanged by a docs-only upstream commit.

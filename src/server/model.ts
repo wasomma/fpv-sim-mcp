@@ -16,8 +16,10 @@ export const MODEL_DESCRIPTION = {
     "continuously. All data is notional and unclassified.",
 
   determinism:
-    "All randomness draws from a single seeded mulberry32 stream (terrain uses separate streams derived from the " +
-    "same seed). Fixed 0.1 s physics ticks; DF scans every 1.5 s. Identical (seed, config_overrides) inputs " +
+    "All engagement randomness — EMCON phase offsets, emplacement jitter, detection rolls, bearing noise, and the " +
+    "display-only enemy-drone track noise — draws in a fixed order from one seeded mulberry32 stream; terrain uses " +
+    "separate streams derived from the same seed (seed+101/202/303/404), so it can never perturb the engagement. " +
+    "Fixed 0.1 s physics ticks; DF scans every 1.5 s. Identical (seed, config_overrides) inputs " +
     "reproduce the identical engagement, tick for tick — verified against the original browser implementation by " +
     "golden-master tests (see DESIGN_NOTES.md of this project).",
 
@@ -28,12 +30,14 @@ export const MODEL_DESCRIPTION = {
     "and emplacement (units nudge west out of water); drones do not collide with terrain.",
 
   rf_propagation:
-    "pathAtten() samples 14 points along the sensor-to-emitter sight line. Terrain above the line of sight adds " +
-    "heavy but not absolute blocking (diffraction is the stated reason blocking saturates rather than going " +
-    "binary); segments where the ray is within canopy height (18 m) of the ground accumulate soft vegetation loss " +
-    "proportional to canopy density. The result (0 = clean line of sight, capped at 6) multiplies detection " +
-    "probability via exp(-att) and inflates bearing error. Frequency references in the event log (915 MHz, " +
-    "5.8 GHz) are cosmetic flavor, not a link budget.",
+    "pathAtten() samples 13 interior points along the sensor-to-emitter sight line (K = 14 subdivisions). Each " +
+    "sample counts toward at most one of two terms: terrain more than 2 m above the line of sight adds heavy but " +
+    "not absolute blocking (diffraction is the stated reason blocking saturates rather than going binary); " +
+    "otherwise, if the ray is below canopy top (ground + 18 m), the sample accumulates soft vegetation loss " +
+    "proportional to canopy density. The result, min(6, block/14 * 4.2 + veg * 0.14), is 0 for a clean line of " +
+    "sight and tops out near 3.9 with the whole path blocked (about 1.8 under full canopy) — the nominal cap of 6 " +
+    "is never reached. It multiplies detection probability via exp(-att) and inflates bearing error. Frequency " +
+    "references in the event log (915 MHz, 5.8 GHz) are cosmetic flavor, not a link budget.",
 
   df_collection: {
     scan_model:
@@ -52,14 +56,16 @@ export const MODEL_DESCRIPTION = {
   fix_estimation: {
     solver:
       "Weighted least squares over all held LOBs. Measurement model: perpendicular offset from each bearing line, " +
-      "noise sigma_perp = sigma_bearing * range, weight 1/sigma_perp^2. Two iterations (weights depend on range to " +
-      "the answer). Covariance = residual-inflated inverse normal matrix: scaled by max(1, chi2/(n-2)) so a " +
+      "noise sigma_perp = sigma_bearing * range (range floored at 300 m), weight 1/sigma_perp^2. Two iterations " +
+      "(weights depend on range to the answer). Covariance = residual-inflated inverse normal matrix: scaled by " +
+      "max(1, chi2/(n-2)) so a " +
       "small-sample geometry cannot report an optimistic ellipse. CEP ~= 0.59*(sigma1+sigma2), floored at " +
       "CEP_FLOOR_M (35 m).",
     quality_gates: [
       "Participation gate: no solve until MIN_LOBS_SOLVE (6) LOBs exist AND the second-strongest collector holds " +
       "MIN_LOBS_2ND (3) of them. Defends against single-sensor solutions whose along-range position slides freely.",
-      "Geometry penalty: the crossing angle between the two strongest collectors' mean bearings and the balance " +
+      "Geometry penalty: the crossing angle between the bearings from each of the two strongest collectors TO the " +
+      "current estimate (the geometry of the cut at the solution, not an average of measured LOBs) and the balance " +
       "of their LOB counts divide into the CEP — a shallow-cut or lopsided fix reports a proportionally worse CEP.",
       "Jitter penalty: the last 6 solutions are kept; if the estimate is still wandering (RMS scatter), the " +
       "effective CEP cannot be small yet. Effective CEP = max(formal, geometry-penalized, jitter).",
@@ -76,7 +82,8 @@ export const MODEL_DESCRIPTION = {
     "HOLD_STANDOFF_M forward of own GCS toward the named area of interest; orbit at LOITER_MPS with a 0.62x " +
     "battery drain while the ground nodes build the fix; dash at DASH_MPS on commit; inside 380 m of the estimate " +
     "descend below canopy at TERMINAL_MPS; visually acquire the real GCS within ACQ_RANGE_M (220 m); if the drone " +
-    "reaches the fix point without acquiring, it flies an expanding search growing TERMINAL_SEARCH_GROW m/s — a " +
+    "reaches the fix point without acquiring, it flies an outward spiral search (radius growing " +
+    "TERMINAL_SEARCH_GROW m/s, tangential speed held at TERMINAL_MPS; a steep spiral, not repeated laps) — a " +
     "modest fix error is recovered quickly, a gross one burns the battery. Steering is a turn-rate-limited " +
     "heading controller with rate-limited speed and climb; movement is dead reckoning per 0.1 s tick.",
 
