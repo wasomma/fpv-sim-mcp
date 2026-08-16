@@ -10,6 +10,14 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+### Changed
+- CI: `upstream-drift` workflow bumped `actions/checkout` and
+  `actions/setup-node` from v4 to v5 (Node 24 action runtime), clearing
+  GitHub's Node 20 deprecation warning. The workflow still tests on
+  Node 20, the package's stated minimum; setup-node v5's automatic
+  package-manager caching does not engage because `package.json` has no
+  `packageManager` field.
+
 ## [0.2.2] — 2026-08-16
 
 No engine or tool behavior changes; golden fixtures unchanged. Dependency
