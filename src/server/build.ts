@@ -24,13 +24,30 @@ import { configOverridesSchema, buildConfigSchemaPayload } from "./params.js";
 import { MODEL_DESCRIPTION } from "./model.js";
 import { comparisonSummary } from "./summary.js";
 
-export const SERVER_VERSION = "0.1.0";
 const SWEEP_MAX = 1000;
 const COMPARE_MAX = 500;
 
 /* dist/src/server/build.js -> package root is three levels up. */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, "..", "..", "..");
+
+/*
+ * The version the server reports — in the MCP initialize handshake, on
+ * /healthz, and in the startup banner — is read from package.json so that
+ * CHANGELOG.md and package.json remain the only two places a release touches.
+ * (A hardcoded copy here silently fell behind at 0.2.0.) If package.json is
+ * unreadable the sentinel below is deliberately conspicuous rather than fatal:
+ * a wrong label should not take down a working simulation server, but it
+ * should be obvious on /healthz. test/version.test.ts guards this.
+ */
+export const SERVER_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(pkgRoot, "package.json"), "utf8")) as { version?: unknown };
+    return typeof pkg.version === "string" && pkg.version.length > 0 ? pkg.version : "0.0.0-unknown";
+  } catch {
+    return "0.0.0-unknown";
+  }
+})();
 
 const json = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
