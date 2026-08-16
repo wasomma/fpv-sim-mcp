@@ -71,9 +71,11 @@ export function computeEstimate(M: Measurement[], start: Vec2, FIX: FixConfig): 
       const cep = Math.max(FIX.CEP_FLOOR_M, 0.59 * (s1 + s2));
       // Geometric quality from genuine multi-sensor crossing. Group LOBs by
       // sensor; take the two strongest collectors, compute the crossing angle
-      // between their mean bearings, and weight by how balanced the evidence
-      // is. A fix leaning on one sensor (few crossing LOBs from the other)
-      // has weak along-range constraint and must report a large CEP.
+      // between the bearings from each of them TO the current estimate p0
+      // (the upstream comment says "mean bearings"; the code — here and
+      // upstream — uses sensor->estimate bearings), and weight by how balanced
+      // the evidence is. A fix leaning on one sensor (few crossing LOBs from
+      // the other) has weak along-range constraint and must report a large CEP.
       const byS: Record<string, { n: number; sx: number; sy: number }> = {};
       for (const m of M) {
         const key = Math.round(m.sx) + "_" + Math.round(m.sy);

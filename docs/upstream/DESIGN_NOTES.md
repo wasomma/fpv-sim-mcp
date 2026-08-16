@@ -60,8 +60,9 @@ Two symmetric teams on a 4000 m × 4000 m map. Each team has:
 - **1 armed FPV sUAS** with a kinetic payload and ~20 min of battery.
 
 BLUFOR sets in on the western side, OPFOR in the eastern interior short of the
-coast, each with ±120 m emplacement jitter per seed (and a nudge-west guard so
-nothing spawns in the water). Each side has a named area of interest (NAI)
+coast, each unit with ±60 m emplacement jitter per axis per seed
+(`(rng() - 0.5) * 120`, so a 120 m spread; and a nudge-west guard so nothing
+spawns in the water). Each side has a named area of interest (NAI)
 around the suspected enemy position that drives its drone's holding point.
 
 ### The one asymmetry: EMCON
@@ -90,16 +91,21 @@ edge and a shallow bay in the northeast. Canopy density is separate noise,
 zeroed on beach/water, thinned on crests, cut by six seeded clearings and a
 winding east–west trail. Both are sampled bilinearly from 200×200 grids.
 
-`pathAtten(a, b)` samples 14 points along the sensor→emitter sight line:
+`pathAtten(a, b)` samples 13 interior points along the sensor→emitter sight
+line (`K = 14` subdivisions, `i = 1..13`); each sample counts toward at most
+one of two terms (or neither, if the ray is clear of both terrain and canopy):
 
-- terrain above the line-of-sight ray adds **hard (but not absolute) blocking**
-  — the comment notes diffraction as the reason blocking saturates rather
-  than going binary;
-- segments where the ray is within canopy height (18 m) of the ground
-  accumulate **soft vegetation loss** proportional to canopy density.
+- terrain more than 2 m above the line-of-sight ray adds **hard (but not
+  absolute) blocking** — the comment notes diffraction as the reason blocking
+  saturates rather than going binary;
+- otherwise, if the ray is below canopy top (ground + 18 m), the sample
+  accumulates **soft vegetation loss** proportional to canopy density.
 
-The result (0 = clean LOS, capped at 6) multiplies detection probability via
-`exp(-att)` and inflates bearing error `sig = 4.0° × (1 + 0.5·att)`. So a GCS
+The result is `min(6, block/14 × 4.2 + veg × 0.14)`: 0 = clean LOS, about 3.9
+with every sample blocked, about 1.8 under full canopy the whole way — the
+nominal cap of 6 is never actually reached. It multiplies detection
+probability via `exp(-att)` and inflates bearing error
+`sig = 4.0° × (1 + 0.5·att)`. So a GCS
 tucked behind a ridge under canopy is genuinely harder to detect *and* yields
 sloppier bearings — terrain masking matters, which is visible in how fixes
 develop differently seed to seed.
@@ -126,10 +132,11 @@ First-intercept events are logged in message-traffic style ("INITIAL LOB 087T
 
 **Measurement model.** Each LOB is treated as a line; the observable is the
 target's perpendicular offset from that line, with noise
-σ_perp = σ_bearing × range. Each measurement contributes weight
-w = 1/σ_perp² to a 2×2 normal-equation system; solving it gives the
-least-squares intersection point. Two iterations refine the ranges used in
-the weights (range depends on the answer, so iterate).
+σ_perp = σ_bearing × range (range floored at 300 m so a sensor sitting
+nearly on top of the estimate can't claim near-zero σ_perp). Each measurement
+contributes weight w = 1/σ_perp² to a 2×2 normal-equation system; solving it
+gives the least-squares intersection point. Two iterations refine the ranges
+used in the weights (range depends on the answer, so iterate).
 
 **Covariance and ellipse.** The formal covariance is the scaled inverse normal
 matrix, **inflated by the residual χ²/(n−2)** so that when the small-sample
@@ -145,7 +152,10 @@ Three defenses, all visible in the code comments:
 1. **Participation gate** — no solve until ≥6 LOBs exist *and* the
    second-strongest collector holds ≥3 of them.
 2. **Geometry penalty** — group LOBs by sensor, take the two strongest
-   collectors, compute the crossing angle between their mean bearings and how
+   collectors, compute the crossing angle between the bearings *from each of
+   those two sensors to the current estimate* (i.e. the geometry of the cut
+   at the solution, not an average of the measured LOBs — the code comment
+   says "mean bearings"; the code uses sensor→estimate bearings) and how
    balanced their LOB counts are; a lopsided or shallow-cut fix has its CEP
    divided by (angle factor × balance), inflating it toward uselessness.
 3. **Jitter penalty** — the last 6 solutions are kept; if the estimate is
@@ -173,8 +183,12 @@ STANDBY → TRANSIT → HOLD → COMMIT → TERMINAL → IMPACT
 - **TERMINAL** — inside 380 m of the estimate: descend to 12 m AGL (below
   canopy) at 45 m/s. Visual acquisition of the actual GCS occurs at 220 m.
   If the drone reaches the fix point without acquiring (the fix was wrong),
-  it flies an **expanding-square search** growing 22 m/s — a modest fix error
-  is recovered quickly; a gross one burns the battery. Impact within 9 m
+  it flies an **outward spiral search**: the commanded search point's radius
+  grows 22 m/s while its tangential speed is held at terminal speed, giving a
+  steep spiral (not repeated laps) that the drone pursues at 45 m/s outward
+  from the estimate (the code comment calls it an "expanding-square"; the
+  geometry is a spiral) — so a modest fix error is recovered quickly and a
+  gross one burns the battery. Impact within 9 m
   destroys the GCS, ends the match, and logs ENDEX.
 - **LINK LOST** — if your GCS dies while your drone flies, C2 is severed; the
   drone decays speed/altitude and is down 8 s later. This is why killing the
@@ -210,14 +224,27 @@ bottom reinforcing that the content is a notional demonstration.
 
 ## Determinism and scenario curation
 
-All randomness — terrain, emplacement jitter, EMCON phase offsets, detection
-rolls, bearing noise — draws from one `mulberry32` stream seeded from
-`CONFIG.SEED` (default 20260719, a date). `resetSim(seed)` rebuilds the world
-and replays identically. The featured-scenario dropdown is nothing more than
-seeds whose engagements were observed to produce instructive outcomes
-(fast disciplined win, deliberate fix, OPFOR upset, photo finish). To curate
-more: hit Random, watch, and if the engagement teaches something, copy the
-seed from the footer into the `<select>`.
+All engagement randomness is `mulberry32`, keyed off one seed (the
+`resetSim(seed)` argument; `CONFIG.SEED` = 20260719, a date, is the default),
+in a handful of streams derived from it. The **main engagement stream**
+`mulberry32(seed)` supplies, in a fixed order: the EMCON phase offsets, the
+emplacement jitter, and then every per-scan draw — uplink and downlink
+detection rolls, the Gaussian bearing noise on each intercepted LOB, and the
+Gaussian position noise on the enemy-drone track (display-only, but it still
+consumes draws). Terrain uses its own derived streams (`seed + 101/202/303`
+for the three noise fields, `seed + 404` for clearings and the trail) and the
+canopy speckle texture uses `seed + 909`, so re-rendering terrain can never
+perturb the engagement. `resetSim(seed)` rebuilds the world and replays
+identically. Because the draw *order* on the main stream is part of the
+determinism contract, anything that adds, removes, or reorders a draw is a
+behavior-changing edit (see `CHANGELOG.md`). The featured-scenario dropdown is
+nothing more than seeds whose engagements were observed to produce
+instructive outcomes (fast disciplined win, deliberate fix, OPFOR upset,
+photo finish). To curate more: hit Random, watch, and if the engagement
+teaches something, copy the seed from the **SEED readout in the Controls
+section of the sidebar** (Random does not rewrite the URL; only if you
+arrived via a dashboard WATCH link is it also in `?seed=`) into the
+`<select>`.
 
 ## Tuning guide
 

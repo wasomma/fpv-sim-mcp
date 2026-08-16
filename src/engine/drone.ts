@@ -138,9 +138,12 @@ export function stepDrone(sim: SimCtx, T: Team, dt: number): void {
     } else {
       // Drive to the fix center first. Only once the drone has reached the
       // estimated point without acquiring (a fix error larger than sensor
-      // range) does the operator fly an expanding-square visual search
-      // outward. A modest error is recovered quickly; a gross error (a
-      // geometrically weak fix that slipped the commit gate) burns battery.
+      // range) does the operator fly an outward spiral visual search (the
+      // upstream comment says "expanding-square"; the geometry below is a
+      // spiral: radius grows TERMINAL_SEARCH_GROW m/s while the tangential
+      // rate is pinned to TERMINAL_MPS). A modest error is recovered quickly;
+      // a gross error (a geometrically weak fix that slipped the commit gate)
+      // burns battery.
       const d2fix = dist(d.x, d.y, T.est.p!.x, T.est.p!.y);
       if (d2fix > D.WPT_RADIUS_M && !d.fixReached) {
         targetX = T.est.p!.x; targetY = T.est.p!.y;   // still inbound to the fix

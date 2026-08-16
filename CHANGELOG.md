@@ -10,6 +10,23 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+### Docs
+- `describe_model` text (`src/server/model.ts`) corrected to match the
+  code, in step with upstream fpv-sim's DESIGN_NOTES.md fix (fpv-sim
+  PR #20): `pathAtten` samples 13 interior points and tops out near 3.9
+  (the cap of 6 is never reached); WLS weights floor range at 300 m; the
+  geometry-penalty cut angle is between the two strongest sensors'
+  bearings *to the current estimate*, not their mean LOBs; the terminal
+  search is an outward spiral, not an "expanding search" of unspecified
+  shape; and the determinism entry names every main-stream consumer
+  (including the display-only enemy-drone track noise) and the derived
+  terrain streams. Two engine comments (`fix.ts`, `drone.ts`) that had
+  inherited the upstream "mean bearings" / "expanding-square" wording are
+  corrected — comments only, no code change; goldens unchanged.
+- `docs/upstream/DESIGN_NOTES.md` re-synced to upstream `74b161a`
+  (`SNAPSHOT.md` updated; that pin is the design-notes copy, distinct
+  from the fixtures' `_meta.source_commit`).
+
 ### Changed
 - CI: `upstream-drift` workflow bumped `actions/checkout` and
   `actions/setup-node` from v4 to v5 (Node 24 action runtime), clearing
