@@ -10,6 +10,22 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+### Security
+- `npm audit fix` (no `--force`): four transitive dependencies of
+  `@modelcontextprotocol/sdk` bumped within their existing semver ranges
+  to clear all reported advisories — `hono` 4.12.31 → 4.13.2 (ReDoS in
+  CORS middleware, SSR `memo()` cross-request retention, proxy-helper
+  `Connection` header handling, language-middleware complexity),
+  `@hono/node-server` 1.19.14 → 1.19.17 (`serve-static` path traversal
+  on Windows), `fast-uri` 3.1.4 → 3.1.5 (host confusion via backslash
+  authority), `ip-address` 10.2.0 → 10.5.0 (leading-zero / CIDR /
+  IPv4-mapped misclassification enabling SSRF bypasses). None of these
+  code paths are exercised by this server (it uses `node:http` directly
+  and the SDK's Streamable HTTP transport, no CORS/static/proxy
+  middleware), so this is hygiene, not a fix for an exposure. SDK stays
+  at 1.29.0; `package.json` unchanged; lockfile only. `npm audit` is
+  clean afterwards.
+
 ## [0.2.1] — 2026-08-16
 
 No engine or tool behavior changes; golden fixtures unchanged.
