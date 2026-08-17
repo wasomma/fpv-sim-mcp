@@ -10,6 +10,15 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-08-16
+
+No engine or tool behavior changes; golden fixtures unchanged. CI and
+docs only: the upstream-drift parity check now runs on every pull request
+and is a required status check on `main` (paired with fpv-sim's new
+`parity` workflow, so the two repos cannot diverge at merge time), and
+`describe_model` / the pinned DESIGN_NOTES copy are corrected against the
+code.
+
 ### Docs
 - `describe_model` text (`src/server/model.ts`) corrected to match the
   code, in step with upstream fpv-sim's DESIGN_NOTES.md fix (fpv-sim
@@ -141,7 +150,8 @@ No engine or tool behavior changes; golden fixtures unchanged.
   (winner, both-drones-down, or 3600 s cap — the latter two reported as
   first-class `STALEMATE` outcomes) and flag timestamps for aggregation.
 
-[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.1.0...v0.2.0
