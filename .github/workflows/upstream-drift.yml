@@ -10,14 +10,16 @@
 # differ from the committed ones.
 #
 # When it runs:
-#   - pull_request, push to main -> per-PR check. A PR whose engine no
-#     longer reproduces the committed fixtures, or whose fixtures no longer
-#     match live upstream main, shows a red check before it merges — so
-#     divergence between the two repos surfaces at merge time, not weeks
-#     later. (fpv-sim's own `parity` workflow is the mirror-image check on
-#     its side: it regenerates these fixtures from a PR's index.html.)
-#     It is a status check, not a hard block: a failing run only prevents
-#     merging if branch protection makes the `drift` job required.
+#   - pull_request, push to main -> merge gate. The `drift` job is a
+#     required status check on main (repository ruleset "main: require
+#     upstream-drift"), so a PR whose engine no longer reproduces the
+#     committed fixtures, or whose fixtures no longer match live upstream
+#     main, cannot merge — divergence between the two repos is blocked at
+#     merge time, not found weeks later. (fpv-sim's own `parity` workflow
+#     is the mirror-image check on its side: it regenerates these fixtures
+#     from a PR's index.html; it is advisory there because it is
+#     path-filtered.) Renaming this job would orphan the ruleset's
+#     required context — update the ruleset if you do.
 #   - weekly schedule, manual    -> catches upstream moving while this repo
 #     is quiet.
 #
