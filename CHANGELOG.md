@@ -42,8 +42,12 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
   for catching upstream movement while this repo is quiet. Paired with
   fpv-sim's new `parity` workflow (which regenerates these fixtures from
   a PR's `index.html` on that side), divergence between the two repos
-  surfaces at merge time on whichever side changes. (A status check, not
-  a hard block — no branch protection requires it.)
+  surfaces at merge time on whichever side changes.
+- CI: the `drift` job is now a required status check on `main`
+  (repository ruleset "main: require upstream-drift", no bypass actors),
+  so a red `upstream-drift` run blocks the merge outright rather than
+  merely flagging it. Repo setting, recorded here so it isn't invisible:
+  renaming the job requires updating the ruleset's required context.
 
 ## [0.2.2] — 2026-08-16
 

@@ -21,16 +21,19 @@ events, float-equal CEPs, no epsilons. Policy:
   and a CHANGELOG entry.
 - The `upstream-drift` workflow re-derives fixtures from live upstream
   main and fails on divergence. It runs on every pull request and push
-  to `main`, so divergence between the two repos surfaces as a red check
-  before merge rather than weeks later (fpv-sim's `parity` workflow is
-  the mirror check on its side), and weekly / on dispatch to catch
-  upstream moving while this repo is quiet. Step "Engine reproduces the
-  committed fixtures" failing = engine regression; step "Committed
-  fixtures match live upstream" failing = upstream changed (stale spec).
-  It is a status check, not a hard block (no branch protection requires
-  it). For an intended upstream behavior change, merge the fpv-sim PR
-  first — this repo's regen PR is red until upstream main carries the
-  change.
+  to `main`, and its `drift` job is a **required status check** on
+  `main` (repository ruleset "main: require upstream-drift", no bypass
+  actors) — a red run blocks the merge, so the two repos cannot diverge
+  at merge time (fpv-sim's `parity` workflow is the mirror check on its
+  side; advisory there because it is path-filtered). It also runs weekly
+  / on dispatch to catch upstream moving while this repo is quiet. Step
+  "Engine reproduces the committed fixtures" failing = engine
+  regression; step "Committed fixtures match live upstream" failing =
+  upstream changed (stale spec). For an intended upstream behavior
+  change, merge the fpv-sim PR first — this repo's regen PR is red (and
+  unmergeable) until upstream main carries the change. Renaming the
+  `drift` job orphans the ruleset's required context; update the
+  ruleset too.
 - Preserve RNG draw order and floating-point expression order in any
   engine edit — they ARE the determinism contract (`src/engine/rng.ts`).
 
