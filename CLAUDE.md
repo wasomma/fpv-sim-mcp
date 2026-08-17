@@ -19,10 +19,18 @@ events, float-equal CEPs, no epsilons. Policy:
 - Fixtures are regenerated only when upstream changes behavior, together
   with the new upstream commit recorded in `docs/upstream/SNAPSHOT.md`
   and a CHANGELOG entry.
-- The weekly `upstream-drift` workflow re-derives fixtures from live
-  upstream main and fails on divergence: step "Engine reproduces the
+- The `upstream-drift` workflow re-derives fixtures from live upstream
+  main and fails on divergence. It runs on every pull request and push
+  to `main`, so divergence between the two repos surfaces as a red check
+  before merge rather than weeks later (fpv-sim's `parity` workflow is
+  the mirror check on its side), and weekly / on dispatch to catch
+  upstream moving while this repo is quiet. Step "Engine reproduces the
   committed fixtures" failing = engine regression; step "Committed
   fixtures match live upstream" failing = upstream changed (stale spec).
+  It is a status check, not a hard block (no branch protection requires
+  it). For an intended upstream behavior change, merge the fpv-sim PR
+  first — this repo's regen PR is red until upstream main carries the
+  change.
 - Preserve RNG draw order and floating-point expression order in any
   engine edit — they ARE the determinism contract (`src/engine/rng.ts`).
 

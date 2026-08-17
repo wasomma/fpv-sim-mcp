@@ -34,6 +34,16 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
   Node 20, the package's stated minimum; setup-node v5's automatic
   package-manager caching does not engage because `package.json` has no
   `packageManager` field.
+- CI: `upstream-drift` now also runs on every pull request and on push
+  to `main`, so a PR whose engine no longer reproduces the committed
+  fixtures, or whose fixtures no longer match live upstream fpv-sim
+  `main`, shows a red check before it merges instead of failing the
+  weekly run afterwards. The weekly schedule and manual dispatch remain
+  for catching upstream movement while this repo is quiet. Paired with
+  fpv-sim's new `parity` workflow (which regenerates these fixtures from
+  a PR's `index.html` on that side), divergence between the two repos
+  surfaces at merge time on whichever side changes. (A status check, not
+  a hard block — no branch protection requires it.)
 
 ## [0.2.2] — 2026-08-16
 
