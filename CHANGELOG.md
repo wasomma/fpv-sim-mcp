@@ -10,6 +10,47 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-18
+
+The tactical-mode port: the engine now covers both of upstream's engagement
+plans. Orbit-mode behavior is unchanged — the orbit fixtures regenerate
+byte-identically (their `_meta.source_commit` pin advances to upstream
+`843a2c5`, the commit that introduced tactical mode without touching orbit
+behavior).
+
+### Added
+- **Tactical mode** in the engine (`src/engine/tactical.ts` plus a
+  `mode: "orbit" | "tactical"` argument on `Simulation` / `runEngagement`,
+  mirroring the browser's `resetSim(seed, mode)`): the multi-FPV sortie
+  stream — per-seed launch plans and aim points, per-airframe EMCON keying,
+  the pilot-station launch scheduler with commit holds, the strike/hunter
+  FSM sharing the orbit attack run, and the sim's own STALEMATE end state
+  (outcome reason `packages_expended`). Both modes share every RNG draw
+  through emplacement; tactical results add the objective, per-airframe
+  package state, sortie tallies and the killer id.
+- **`mode` input on the tools**: `run_engagement`, `sweep_seeds` and
+  `compare_configs` accept `mode` ("orbit" default); `TACTICAL.*` overrides
+  (package size, pilot stations, reserve-or-retask, launch spacing,
+  objective geometry — including the boolean `RESERVE_HUNTER`) join the
+  validated parameter table and `get_config_schema`; `describe_model` gains
+  a `tactical_mode` section; sweeps over tactical results add per-side
+  `strikes_delivered` distributions.
+- **Second golden-fixture set** (`test/fixtures/golden-seeds-tactical.json`,
+  the six featured tactical seeds) with matching golden-master tests, and
+  tactical coverage in the fixture generator. Parity for the port was
+  additionally cross-checked against the vm-run original browser sim over
+  seeds 1–500: outcomes, event logs, fix floats and per-airframe positions
+  all match exactly, reproducing the documented 27% / 15% / 58% split.
+
+### Changed
+- CI: the `upstream-drift` gate now regenerates and compares BOTH fixture
+  sets, so a tactical-behavior change upstream (or an engine regression in
+  either mode) is caught the same way orbit drift always was.
+
+### Docs
+- README, DESIGN_NOTES.md and the pinned `docs/upstream/DESIGN_NOTES.md`
+  copy re-synced for the two-mode era (`SNAPSHOT.md` pin: `843a2c5`).
+
 ## [0.2.3] — 2026-08-16
 
 No engine or tool behavior changes; golden fixtures unchanged. CI and
@@ -150,7 +191,8 @@ No engine or tool behavior changes; golden fixtures unchanged.
   (winner, both-drones-down, or 3600 s cap — the latter two reported as
   first-class `STALEMATE` outcomes) and flag timestamps for aggregation.
 
-[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/wasomma/fpv-sim-mcp/compare/v0.2.0...v0.2.1

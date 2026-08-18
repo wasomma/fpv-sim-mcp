@@ -18,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   runEngagement, aggregateSweep, comparePaired,
-  type ConfigOverrides, type EngagementResult,
+  type ConfigOverrides, type EngagementResult, type SimMode,
 } from "../engine/index.js";
 import { configOverridesSchema, buildConfigSchemaPayload } from "./params.js";
 import { MODEL_DESCRIPTION } from "./model.js";
@@ -54,15 +54,18 @@ const json = (data: unknown) => ({
 });
 
 const seedSchema = z.number().int().min(0).max(4294967295)
-  .describe("Deterministic engagement seed. The same seed always replays the identical engagement. Featured seeds: 20260719 (standard BLUFOR win), 66 (fast BLUFOR win), 57 (deliberate BLUFOR win), 41 (OPFOR win), 59 (close race, OPFOR).");
+  .describe("Deterministic engagement seed. The same seed always replays the identical engagement. Featured orbit seeds: 20260719 (standard BLUFOR win), 66 (fast BLUFOR win), 57 (deliberate BLUFOR win), 41 (OPFOR win), 59 (close race, OPFOR). Featured tactical seeds: 12 (standard BLUFOR win), 26 (fast BLUFOR win), 5 (final-push BLUFOR win), 18 (close race, BLUFOR), 41 (OPFOR win), 14 (stalemate).");
+
+const modeInput = z.enum(["orbit", "tactical"]).optional()
+  .describe('Engagement plan. "orbit" (default): one FPV per side holds a forward orbit while the DF nodes build the fix. "tactical": each side pushes a package of one-way strike sorties into a shared objective (OBJ TANTO), its GCS emitting sortie by sortie, while a reserved hunter-killer launches on the fix; can end in the STALEMATE reason packages_expended. Same terrain, sensors and fix math either way; the same seed gives the same emplacement in both modes.');
 
 const overridesInput = configOverridesSchema.optional()
   .describe("Optional partial CONFIG overrides. Call get_config_schema for the parameter table.");
 
-function sweep(startSeed: number, count: number, overrides?: ConfigOverrides): EngagementResult[] {
+function sweep(startSeed: number, count: number, overrides?: ConfigOverrides, mode?: SimMode): EngagementResult[] {
   const results: EngagementResult[] = [];
   for (let s = startSeed; s < startSeed + count; s++) {
-    results.push(runEngagement(s, overrides));
+    results.push(runEngagement(s, overrides, { mode }));
   }
   return results;
 }
@@ -78,14 +81,15 @@ export function buildServer(): McpServer {
         "Run a single deterministic force-on-force engagement to completion and return the full record: winner " +
         "(or STALEMATE) with reason, duration, phase timeline, per-team fix quality (CEP breakdown), LOB and " +
         "intercept counts per DF node, key event timestamps, drone/GCS end states, and the complete event log. " +
-        "Notional data.",
+        "Tactical mode adds the objective, sortie tallies and the per-airframe package state. Notional data.",
       inputSchema: {
         seed: seedSchema,
+        mode: modeInput,
         config_overrides: overridesInput,
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ seed, config_overrides }) => json(runEngagement(seed, config_overrides)),
+    async ({ seed, mode, config_overrides }) => json(runEngagement(seed, config_overrides, { mode })),
   );
 
   server.registerTool(
@@ -101,12 +105,13 @@ export function buildServer(): McpServer {
       inputSchema: {
         start_seed: seedSchema,
         count: z.number().int().min(1).max(SWEEP_MAX).describe("Number of consecutive seeds to run."),
+        mode: modeInput,
         config_overrides: overridesInput,
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ start_seed, count, config_overrides }) =>
-      json(aggregateSweep(sweep(start_seed, count, config_overrides))),
+    async ({ start_seed, count, mode, config_overrides }) =>
+      json(aggregateSweep(sweep(start_seed, count, config_overrides, mode))),
   );
 
   server.registerTool(
@@ -122,6 +127,7 @@ export function buildServer(): McpServer {
       inputSchema: {
         start_seed: seedSchema,
         count: z.number().int().min(1).max(COMPARE_MAX).describe("Number of consecutive seeds run under BOTH variants."),
+        mode: modeInput,
         config_a: configOverridesSchema.describe("Variant A overrides (may be {} for the stock configuration)."),
         config_b: configOverridesSchema.describe("Variant B overrides (may be {} for the stock configuration)."),
         label_a: z.string().max(80).optional().describe("Human-readable name for variant A."),
@@ -129,16 +135,17 @@ export function buildServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ start_seed, count, config_a, config_b, label_a, label_b }) => {
+    async ({ start_seed, count, mode, config_a, config_b, label_a, label_b }) => {
       const labelA = label_a ?? "variant A";
       const labelB = label_b ?? "variant B";
-      const runsA = sweep(start_seed, count, config_a);
-      const runsB = sweep(start_seed, count, config_b);
+      const runsA = sweep(start_seed, count, config_a, mode);
+      const runsB = sweep(start_seed, count, config_b, mode);
       const summaryA = aggregateSweep(runsA);
       const summaryB = aggregateSweep(runsB);
       const paired = comparePaired(runsA, runsB);
       return json({
         seeds: { start: start_seed, count },
+        mode: mode ?? "orbit",
         variant_a: { label: labelA, overrides: config_a, ...summaryA },
         variant_b: { label: labelB, overrides: config_b, ...summaryB },
         paired,

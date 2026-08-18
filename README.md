@@ -33,7 +33,7 @@ Requires Node 20+.
 git clone https://github.com/wasomma/fpv-sim-mcp.git
 cd fpv-sim-mcp
 npm install
-npm test        # builds and proves browser-parity + unit tests (18 tests)
+npm test        # builds and proves browser-parity + unit tests (26 tests, both modes)
 npm run demo    # exercises the server through a real MCP stdio client
 ```
 
@@ -87,11 +87,23 @@ build produces — same seed, same engagement, any machine.
 
 | Tool | What it does |
 |---|---|
-| `run_engagement(seed, config_overrides?)` | One full deterministic engagement: winner (or STALEMATE) with reason, duration, phase timeline, per-team fix quality (CEP breakdown), LOB/intercept counts per DF node, key timestamps, and the complete event log. |
-| `sweep_seeds(start_seed, count, config_overrides?)` | Up to 1000 consecutive seeds under one configuration, aggregated server-side: win rates (including stalemates), time-to-fix and time-to-kill distributions, stalemate reasons, and notable seeds to drill into. |
-| `compare_configs(start_seed, count, config_a, config_b, labels?)` | Two CONFIG variants over the **same** seeds (paired design — terrain and emplacement luck cancel out), with per-variant stats, outcome flips, deltas, and a plain-language summary generated from the numbers. |
-| `describe_model()` | The modeling assumptions: DF error model, RF propagation, fix quality gates, drone FSM, EMCON semantics — and the known simplifications an agent must respect before drawing conclusions. |
+| `run_engagement(seed, mode?, config_overrides?)` | One full deterministic engagement: winner (or STALEMATE) with reason, duration, phase timeline, per-team fix quality (CEP breakdown), LOB/intercept counts per DF node, key timestamps, and the complete event log. Tactical mode adds the objective, sortie tallies, and the per-airframe package state. |
+| `sweep_seeds(start_seed, count, mode?, config_overrides?)` | Up to 1000 consecutive seeds under one configuration, aggregated server-side: win rates (including stalemates), time-to-fix and time-to-kill distributions, stalemate reasons, and notable seeds to drill into. |
+| `compare_configs(start_seed, count, mode?, config_a, config_b, labels?)` | Two CONFIG variants over the **same** seeds (paired design — terrain and emplacement luck cancel out), with per-variant stats, outcome flips, deltas, and a plain-language summary generated from the numbers. |
+| `describe_model()` | The modeling assumptions: DF error model, RF propagation, fix quality gates, drone FSM, EMCON semantics, both engagement plans — and the known simplifications an agent must respect before drawing conclusions. |
 | `get_config_schema()` | Every tunable parameter with path, unit, default, and sane range. Generated from the same table that validates inputs, so documentation and enforcement cannot drift. |
+
+`mode` selects the engagement plan, exactly as in the browser sim:
+**`"orbit"`** (default) is the original fight — one FPV per side holds a
+forward orbit while the DF nodes build the fix — and **`"tactical"`** is the
+multi-FPV sortie stream: each side pushes a package of one-way strike
+sorties into a shared objective (OBJ TANTO), its GCS emitting sortie by
+sortie, while a reserved hunter-killer launches on the fix; both packages
+spent with no hunter able to go is the STALEMATE reason
+`packages_expended`. Same terrain, sensors and fix math either way, and the
+same seed gives the same emplacement in both modes. Tactical knobs live
+under `TACTICAL.*` in `config_overrides` (package size, pilot stations,
+reserve-or-retask, launch spacing, objective geometry).
 
 Resources: `fpv-sim://design-notes` (the original sim's technical write-up)
 and `fpv-sim://mcp-design-notes` (this project's [DESIGN_NOTES.md](DESIGN_NOTES.md)).

@@ -8,13 +8,15 @@
 
 export { Simulation, runEngagement, MAX_SIM_S_DEFAULT } from "./simulation.js";
 export type {
-  EngagementResult, TeamResult, TeamFixResult, TeamNodeResult, PhaseChange, RunOptions,
+  EngagementResult, TeamResult, TeamFixResult, TeamNodeResult, TacticalDroneResult,
+  ObjectiveResult, PhaseChange, RunOptions,
 } from "./simulation.js";
 export {
   DEFAULT_CONFIG, DEFAULT_SEED, mergeConfig, emconLabel,
 } from "./config.js";
 export type {
-  SimConfig, ConfigOverrides, DroneConfig, CuasConfig, FixConfig, TeamEmconConfig, EmconLabel,
+  SimConfig, ConfigOverrides, DroneConfig, CuasConfig, FixConfig, TeamEmconConfig,
+  TacticalConfig, TacticalOverrides, EmconLabel,
 } from "./config.js";
 export { aggregateSweep, comparePaired, distribution } from "./aggregate.js";
 export type { SweepSummary, PairedComparison, DistributionStats } from "./aggregate.js";
@@ -26,6 +28,6 @@ export { buildWorld, elevAt, canopyAt } from "./terrain.js";
 export type { World } from "./terrain.js";
 export { pathAtten } from "./rf.js";
 export type {
-  Side, EventSide, SimEvent, Team, Drone, DfNode, Gcs, Measurement, Estimate,
-  OutcomeResult, OutcomeReason, Vec2,
+  Side, EventSide, SimEvent, SimMode, Team, Drone, DroneRole, DfNode, Gcs, Measurement,
+  Estimate, Objective, OutcomeResult, OutcomeReason, TrackPoint, Vec2,
 } from "./types.js";

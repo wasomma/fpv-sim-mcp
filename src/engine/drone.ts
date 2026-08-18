@@ -5,6 +5,8 @@
  *                 ↓ (own GCS destroyed)      ↓ (fix error / battery)
  *             LINK LOST → DOWN         expanding search / DOWN
  *
+ * The attack run (COMMIT dash + TERMINAL acquire) lives in attackGuidance(),
+ * shared with tactical mode's hunter-killer exactly as upstream shares it.
  * The only changes from the browser version are the removal of the visual
  * breadcrumb trail and explosion markers; neither touches the RNG or any
  * state the simulation reads back.
@@ -14,22 +16,89 @@ import { clamp, d2r, dist, brgTo, normAng, gridRef, fmtT } from "./math.js";
 import type { Drone, Team } from "./types.js";
 import type { SimCtx } from "./context.js";
 
-function steerToward(d: Drone, tx: number, ty: number, dt: number, turnDps: number): void {
+// Drone id without the side prefix, as the log speaks of it:
+// "BLUFOR-sUAS-1" -> "sUAS-1".
+export const shortId = (T: Team, d: Drone): string => d.id.slice(T.side.length + 1);
+
+export function steerToward(d: Drone, tx: number, ty: number, dt: number, turnDps: number): void {
   const want = brgTo(d.x, d.y, tx, ty);
   const diff = normAng(want - d.hdg);
   const maxTurn = d2r(turnDps) * dt;
   d.hdg = normAng(d.hdg + clamp(diff, -maxTurn, maxTurn));
 }
 
-function moveDrone(sim: SimCtx, d: Drone, dt: number): void {
+export function moveDrone(sim: SimCtx, d: Drone, dt: number): void {
   d.x += Math.sin(d.hdg) * d.spd * dt;
   d.y += Math.cos(d.hdg) * d.spd * dt;
   d.x = clamp(d.x, 30, sim.world.size - 30);
   d.y = clamp(d.y, 30, sim.world.size - 30);
 }
 
+/* Steering demand filled in by attackGuidance(); callers pre-load the
+   transit defaults. */
+export interface GuidanceWant { x: number; y: number; spd: number; agl: number; }
+
+/*
+ * Attack-run guidance against the enemy GCS, shared by both modes (the
+ * ORBIT drone once committed; the TACTICAL hunter-killer from launch).
+ * COMMIT dashes to the current fix and hands off to TERMINAL 380 m out;
+ * TERMINAL descends below canopy, acquires visually inside ACQ_RANGE_M and
+ * homes on the GCS, or — having reached the fix without acquiring — flies
+ * an expanding search outward (an outward spiral: radius grows
+ * TERMINAL_SEARCH_GROW m/s while the tangential rate is pinned to
+ * TERMINAL_MPS). Fills `want` and returns true when the drone impacted this
+ * step, in which case the caller must not move it.
+ */
+export function attackGuidance(sim: SimCtx, T: Team, d: Drone, E: Team, dt: number, want: GuidanceWant): boolean {
+  const D = sim.config.DRONE, label = shortId(T, d);
+  if (d.state === "COMMIT") {
+    want.x = T.est.p!.x; want.y = T.est.p!.y;
+    want.spd = D.DASH_MPS;
+    if (dist(d.x, d.y, want.x, want.y) < 380) {
+      d.state = "TERMINAL";
+      sim.addEvent(T.side, label + " TERMINAL PHASE // DESCENDING BELOW CANOPY FOR VISUAL ID");
+    }
+    return false;
+  }
+  want.spd = D.TERMINAL_MPS; want.agl = D.ALT_TERMINAL_AGL;
+  const gr = dist(d.x, d.y, E.gcs.x, E.gcs.y);
+  if (!T.flags.acquired && gr < D.ACQ_RANGE_M) {
+    T.flags.acquired = true;
+    T.flagTimes.acquired = sim.t;
+    sim.addEvent(T.side, label + " VISUAL ACQ HOSTILE GCS // COMMENCING ATTACK RUN");
+  }
+  if (T.flags.acquired) {
+    want.x = E.gcs.x; want.y = E.gcs.y;
+    if (gr < D.IMPACT_RANGE_M) {
+      d.state = "IMPACT"; d.spd = 0;
+      E.gcs.destroyed = true;
+      sim.winner = T.side; sim.endT = sim.t; sim.killer = d.id;
+      sim.addEvent(T.side, "IMPACT // HOSTILE GCS DESTROYED " + gridRef(E.gcs.x, E.gcs.y));
+      sim.addEvent("SYS", "ENDEX // " + T.side + " VICTORY " + fmtT(sim.t));
+      return true;
+    }
+  } else {
+    // Drive to the fix center first. Only once the drone has reached the
+    // estimated point without acquiring (a fix error larger than sensor
+    // range) does the operator fly the expanding search outward. A modest
+    // error is recovered quickly; a gross error (a geometrically weak fix
+    // that slipped the commit gate) burns battery.
+    const d2fix = dist(d.x, d.y, T.est.p!.x, T.est.p!.y);
+    if (d2fix > D.WPT_RADIUS_M && !d.fixReached) {
+      want.x = T.est.p!.x; want.y = T.est.p!.y;   // still inbound to the fix
+    } else {
+      d.fixReached = true;
+      d.searchR = (d.searchR || 0) + dt * D.TERMINAL_SEARCH_GROW;
+      d.orbitA += dt * (D.TERMINAL_MPS / Math.max(40, d.searchR));
+      want.x = T.est.p!.x + Math.sin(d.orbitA) * d.searchR;
+      want.y = T.est.p!.y + Math.cos(d.orbitA) * d.searchR;
+    }
+  }
+  return false;
+}
+
 export function stepDrone(sim: SimCtx, T: Team, dt: number): void {
-  const d = T.drone, E = sim.teams[T.enemy], D = sim.config.DRONE;
+  const d = T.drone!, E = sim.teams[T.enemy], D = sim.config.DRONE;
 
   if (!d.launched) {
     if (sim.t >= T.launchT && !T.gcs.destroyed) {
@@ -110,52 +179,10 @@ export function stepDrone(sim: SimCtx, T: Team, dt: number): void {
     targetX = T.holdPt.x + Math.sin(d.orbitA) * D.HOLD_RADIUS_M;
     targetY = T.holdPt.y + Math.cos(d.orbitA) * D.HOLD_RADIUS_M;
     wantSpd = D.LOITER_MPS; wantAgl = D.ALT_LOITER_AGL;
-  } else if (d.state === "COMMIT") {
-    targetX = T.est.p!.x; targetY = T.est.p!.y;
-    wantSpd = D.DASH_MPS;
-    if (dist(d.x, d.y, targetX, targetY) < 380) {
-      d.state = "TERMINAL";
-      sim.addEvent(T.side, "sUAS-1 TERMINAL PHASE // DESCENDING BELOW CANOPY FOR VISUAL ID");
-    }
-  } else if (d.state === "TERMINAL") {
-    wantSpd = D.TERMINAL_MPS; wantAgl = D.ALT_TERMINAL_AGL;
-    const gr = dist(d.x, d.y, E.gcs.x, E.gcs.y);
-    if (!T.flags.acquired && gr < D.ACQ_RANGE_M) {
-      T.flags.acquired = true;
-      T.flagTimes.acquired = sim.t;
-      sim.addEvent(T.side, "sUAS-1 VISUAL ACQ HOSTILE GCS // COMMENCING ATTACK RUN");
-    }
-    if (T.flags.acquired) {
-      targetX = E.gcs.x; targetY = E.gcs.y;
-      if (gr < D.IMPACT_RANGE_M) {
-        d.state = "IMPACT"; d.spd = 0;
-        E.gcs.destroyed = true;
-        sim.winner = T.side; sim.endT = sim.t;
-        sim.addEvent(T.side, "IMPACT // HOSTILE GCS DESTROYED " + gridRef(E.gcs.x, E.gcs.y));
-        sim.addEvent("SYS", "ENDEX // " + T.side + " VICTORY " + fmtT(sim.t));
-        return;
-      }
-    } else {
-      // Drive to the fix center first. Only once the drone has reached the
-      // estimated point without acquiring (a fix error larger than sensor
-      // range) does the operator fly an outward spiral visual search (the
-      // upstream comment says "expanding-square"; the geometry below is a
-      // spiral: radius grows TERMINAL_SEARCH_GROW m/s while the tangential
-      // rate is pinned to TERMINAL_MPS). A modest error is recovered quickly;
-      // a gross error (a geometrically weak fix that slipped the commit gate)
-      // burns battery.
-      const d2fix = dist(d.x, d.y, T.est.p!.x, T.est.p!.y);
-      if (d2fix > D.WPT_RADIUS_M && !d.fixReached) {
-        targetX = T.est.p!.x; targetY = T.est.p!.y;   // still inbound to the fix
-      } else {
-        d.fixReached = true;
-        d.searchR = (d.searchR || 0) + dt * D.TERMINAL_SEARCH_GROW;
-        d.orbitA += dt * (D.TERMINAL_MPS / Math.max(40, d.searchR));
-        targetX = T.est.p!.x + Math.sin(d.orbitA) * d.searchR;
-        targetY = T.est.p!.y + Math.cos(d.orbitA) * d.searchR;
-      }
-      wantSpd = D.TERMINAL_MPS; wantAgl = D.ALT_TERMINAL_AGL;
-    }
+  } else if (d.state === "COMMIT" || d.state === "TERMINAL") {
+    const want: GuidanceWant = { x: 0, y: 0, spd: wantSpd, agl: wantAgl };
+    if (attackGuidance(sim, T, d, E, dt, want)) return;
+    targetX = want.x; targetY = want.y; wantSpd = want.spd; wantAgl = want.agl;
   }
 
   steerToward(d, targetX, targetY, dt, D.TURN_DPS);

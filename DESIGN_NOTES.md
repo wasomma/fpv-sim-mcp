@@ -10,8 +10,8 @@ why the interface looks the way it does. For the simulation model itself
 
 1. **Behavior parity, not reimplementation.** The engine must produce the
    *identical* engagement for a given seed as the browser file — the original
-   is the specification, and its five featured scenarios are the acceptance
-   test.
+   is the specification, and its featured scenarios (five orbit, six
+   tactical) are the acceptance test.
 2. **Agent-shaped interface.** Tools sized for how an agent actually works:
    statistics first, drill-down second, model assumptions on demand.
 3. **Reproducibility as a feature.** Every tool result must be reproducible
@@ -21,8 +21,13 @@ why the interface looks the way it does. For the simulation model itself
 
 The original `index.html` holds one `<script>` block where simulation,
 rendering, and UI interleave. The extraction boundary is exact: everything
-from `CONFIG` through `stepSim()` (lines ~218–999 of the original) is
-simulation; everything after is rendering/UI and was left behind.
+from `CONFIG` through the end of the `TACTICAL MODE` section (i.e. before
+`RENDERING`) is simulation; everything after is rendering/UI and was left
+behind. The two engagement plans mirror the browser's
+`resetSim(seed, mode)`: `"orbit"` (the original fight, and the default) and
+`"tactical"` (the sortie stream, `src/engine/tactical.ts`); both share every
+RNG draw through emplacement and diverge at the air plan, exactly as
+upstream.
 
 ### Preserved verbatim
 
@@ -39,7 +44,10 @@ simulation; everything after is rendering/UI and was left behind.
   team EMCON phase offsets (2 draws × 2 teams) → emplacement jitter (4 GCS
   draws, 8 node draws) → per-scan detection rolls and Box–Muller bearing
   noise (variable draws — the zero-rejection loops are part of the
-  contract). The engine keeps every call site in the original sequence;
+  contract). Tactical mode inserts its setup draws between emplacement and
+  the first tick (objective jitter, then per strike sortie: EMCON phases,
+  aim-point gaussians, launch jitter) and draws nothing in orbit mode. The
+  engine keeps every call site in the original sequence;
   `src/engine/rng.ts` documents the rule.
 
 ### Refactored
@@ -56,11 +64,14 @@ simulation; everything after is rendering/UI and was left behind.
 ### Headless additions (not in the browser version)
 
 - **Termination.** The browser ticks until a human closes the tab. Headless
-  runs end on winner, on *both drones down* (no emitter and no striker can
-  ever change state again), or at a 3600 s cap — the latter two reported as
-  `STALEMATE` with a reason. Stalemates are ~30–35% of random seeds under
-  the honest estimator (matching the original development history's finding)
-  and are a first-class outcome in every statistic.
+  orbit runs end on winner, on *both drones down* (no emitter and no striker
+  can ever change state again), or at a 3600 s cap — the latter two reported
+  as `STALEMATE` with a reason. Stalemates are ~30–35% of random orbit seeds
+  under the honest estimator (matching the original development history's
+  finding) and are a first-class outcome in every statistic. Tactical mode
+  needs no invented termination: the sim's own STALEMATE end state (both
+  packages expended, no hunter able to launch) ends the run, reported with
+  reason `packages_expended`.
 - Flag timestamps (`fix_established_t_s`, `commit_t_s`, ...) so aggregation
   never parses log text.
 - A phase-transition timeline.
@@ -73,8 +84,11 @@ Three legs, each catching a different failure:
    `<script>` source is executed headless in a Node `vm` with all DOM/canvas
    globals replaced by an inert proxy, and `addLog` swapped for an event
    collector after load. Both interventions are provably outside the sim
-   state/RNG path. Five featured seeds → `test/fixtures/golden-seeds.json`
-   (committed, pinned to the upstream commit).
+   state/RNG path. Five featured orbit seeds → `test/fixtures/golden-seeds.json`
+   and six featured tactical seeds → `test/fixtures/golden-seeds-tactical.json`
+   (committed, pinned to the upstream commit). The tactical port was
+   additionally cross-checked against the vm-run original over seeds 1–500:
+   outcomes, event logs, fix floats and per-airframe positions all match.
 2. **Golden-master tests** (`test/golden.test.ts`): the engine must
    reproduce each fixture *exactly* — event logs string-equal, end times
    tick-equal, LOB counts integer-equal, CEPs and positions float-equal.

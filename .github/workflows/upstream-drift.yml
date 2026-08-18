@@ -84,29 +84,40 @@ jobs:
         working-directory: fpv-sim-mcp
         run: |
           cp test/fixtures/golden-seeds.json /tmp/committed-goldens.json
+          cp test/fixtures/golden-seeds-tactical.json /tmp/committed-goldens-tactical.json
           npm run goldens
 
       - name: Committed fixtures match live upstream
         working-directory: fpv-sim-mcp
         # _meta carries a generation timestamp and the upstream commit, so
-        # only the runs payload is compared.
+        # only the runs payload is compared. Both fixture sets are checked:
+        # orbit (golden-seeds.json) and tactical (golden-seeds-tactical.json).
         run: |
           node -e '
             const fs = require("node:fs");
-            const committed = JSON.parse(fs.readFileSync("/tmp/committed-goldens.json", "utf8"));
-            const fresh = JSON.parse(fs.readFileSync("test/fixtures/golden-seeds.json", "utf8"));
-            if (JSON.stringify(committed.runs) === JSON.stringify(fresh.runs)) {
-              console.log(
-                "No drift: upstream main (" + fresh._meta.source_commit.slice(0, 7) +
-                ") still reproduces the fixtures pinned at " + committed._meta.source_commit.slice(0, 7) + "."
+            const sets = [
+              ["orbit", "/tmp/committed-goldens.json", "test/fixtures/golden-seeds.json"],
+              ["tactical", "/tmp/committed-goldens-tactical.json", "test/fixtures/golden-seeds-tactical.json"],
+            ];
+            let drifted = false;
+            for (const [label, committedPath, freshPath] of sets) {
+              const committed = JSON.parse(fs.readFileSync(committedPath, "utf8"));
+              const fresh = JSON.parse(fs.readFileSync(freshPath, "utf8"));
+              if (JSON.stringify(committed.runs) === JSON.stringify(fresh.runs)) {
+                console.log(
+                  "No " + label + " drift: upstream main (" + fresh._meta.source_commit.slice(0, 7) +
+                  ") still reproduces the fixtures pinned at " + committed._meta.source_commit.slice(0, 7) + "."
+                );
+                continue;
+              }
+              drifted = true;
+              console.error(
+                "DRIFT DETECTED (" + label + "): upstream fpv-sim (" + fresh._meta.source_commit.slice(0, 7) +
+                ") no longer reproduces the committed golden fixtures (pinned at " +
+                committed._meta.source_commit.slice(0, 7) + ")."
               );
-              process.exit(0);
             }
-            console.error(
-              "DRIFT DETECTED: upstream fpv-sim (" + fresh._meta.source_commit.slice(0, 7) +
-              ") no longer reproduces the committed golden fixtures (pinned at " +
-              committed._meta.source_commit.slice(0, 7) + ")."
-            );
+            if (!drifted) process.exit(0);
             console.error("The engine is passing its tests against an outdated specification.");
             console.error(
               "Resolve by reviewing the upstream change, updating the engine to match, " +
