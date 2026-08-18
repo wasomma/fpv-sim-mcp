@@ -82,6 +82,7 @@ for (const golden of fixture.runs) {
         assert.equal(et.fix.cut_deg, gt.fix.cutDeg);
         assert.equal(et.fix.balance, gt.fix.balance);
       }
+      assert.ok(et.drone, `${side} should report its orbit drone`);
       assert.equal(et.drone.end_state, gt.drone.state, `${side} drone end state`);
       assert.equal(et.drone.battery_pct, gt.drone.batt, `${side} drone battery`);
       assert.equal(et.drone.x, gt.drone.x);
