@@ -33,6 +33,8 @@ export interface SweepSummary {
   time_to_kill_s: DistributionStats | null;
   duration_s: DistributionStats;
   stalemate_reasons: Partial<Record<OutcomeReason, number>>;
+  /* Tactical-mode sweeps only: strikes delivered on the objective per side. */
+  strikes_delivered?: Record<Side, DistributionStats | null>;
   notable_seeds: {
     fastest_kill: { seed: number; winner: Side; t_s: number } | null;
     slowest_kill: { seed: number; winner: Side; t_s: number } | null;
@@ -69,6 +71,7 @@ export function aggregateSweep(results: EngagementResult[]): SweepSummary {
   const ttf: Record<Side, number[]> = { BLUFOR: [], OPFOR: [] };
   const ttk: number[] = [];
   const durations: number[] = [];
+  const strikes: Record<Side, number[]> = { BLUFOR: [], OPFOR: [] };
   let fastest: { seed: number; winner: Side; t_s: number } | null = null;
   let slowest: { seed: number; winner: Side; t_s: number } | null = null;
   let exampleStalemate: number | null = null;
@@ -88,12 +91,18 @@ export function aggregateSweep(results: EngagementResult[]): SweepSummary {
     for (const side of ["BLUFOR", "OPFOR"] as const) {
       const t = r.teams[side].fix_established_t_s;
       if (t !== null) ttf[side].push(t);
+      const s = r.teams[side].strikes_delivered;
+      if (s !== undefined) strikes[side].push(s);
     }
   }
 
   const n = results.length;
   const rate = (c: number): number => Math.round((c / n) * 1000) / 1000;
+  const strikesOut = (strikes.BLUFOR.length || strikes.OPFOR.length)
+    ? { strikes_delivered: { BLUFOR: distribution(strikes.BLUFOR), OPFOR: distribution(strikes.OPFOR) } }
+    : {};
   return {
+    ...strikesOut,
     runs: n,
     start_seed: results[0].seed,
     end_seed: results[results.length - 1].seed,

@@ -16,10 +16,11 @@ import { z } from "zod";
 import { DEFAULT_CONFIG } from "../engine/index.js";
 
 export interface ParamMeta {
-  default: number;
+  default: number | boolean;
   unit: string;
-  range: [number, number];
+  range: [number, number];   // ignored for boolean parameters
   integer?: boolean;
+  boolean?: boolean;
   description: string;
 }
 
@@ -80,9 +81,35 @@ const TEAM_PARAM_META = (side: "BLUFOR" | "OPFOR"): SectionMeta<keyof typeof D.T
 
 export const TEAM_PARAMS = { BLUFOR: TEAM_PARAM_META("BLUFOR"), OPFOR: TEAM_PARAM_META("OPFOR") };
 
+/* Tactical mode only (mode: "tactical" on the tools). Orbit-mode runs accept
+   but ignore these — they mirror CONFIG.TACTICAL, which orbit never reads. */
+export const TACTICAL_PARAMS: SectionMeta<"OBJ_X" | "OBJ_Y" | "OBJ_RADIUS_M" | "RESERVE_HUNTER" | "LAUNCH_INTERVAL_S" | "LAUNCH_JITTER_S" | "STRIKE_TERMINAL_M" | "AIM_SIGMA_M"> = {
+  OBJ_X:             { default: D.TACTICAL.OBJ_X, unit: "m", range: [400, 3600], description: "Contested objective easting (nominal; jittered per seed like the emplacements)." },
+  OBJ_Y:             { default: D.TACTICAL.OBJ_Y, unit: "m", range: [400, 3600], description: "Contested objective northing (nominal; jittered per seed like the emplacements)." },
+  OBJ_RADIUS_M:      { default: D.TACTICAL.OBJ_RADIUS_M, unit: "m", range: [60, 800], description: "Objective radius; strike aim points are scattered inside it." },
+  RESERVE_HUNTER:    { default: D.TACTICAL.RESERVE_HUNTER, unit: "flag", range: [0, 1], boolean: true, description: "Hold one extra FPV back as the dedicated GCS hunter-killer. false: the next unflown strike airframe is retasked when the fix commits (and there is no final push once the package is expended)." },
+  LAUNCH_INTERVAL_S: { default: D.TACTICAL.LAUNCH_INTERVAL_S, unit: "s", range: [10, 600], description: "Nominal spacing between strike launches." },
+  LAUNCH_JITTER_S:   { default: D.TACTICAL.LAUNCH_JITTER_S, unit: "s", range: [0, 120], description: "+/- uniform jitter on the launch spacing, drawn per sortie at reset." },
+  STRIKE_TERMINAL_M: { default: D.TACTICAL.STRIKE_TERMINAL_M, unit: "m", range: [100, 1500], description: "A strike sortie hands from autonomous transit to manual terminal control this far from its aim point (manual control keys the uplink continuously)." },
+  AIM_SIGMA_M:       { default: D.TACTICAL.AIM_SIGMA_M, unit: "m", range: [10, 400], description: "1-sigma scatter of strike aim points about the objective center." },
+};
+
+const TACTICAL_SIDE_PARAM = (name: "SORTIES" | "PILOTS", side: "BLUFOR" | "OPFOR"): ParamMeta =>
+  name === "SORTIES"
+    ? { default: D.TACTICAL.SORTIES[side], unit: "count", range: [1, 12], integer: true, description: "Strike airframes in this side's package (one-way; expended on impact)." }
+    : { default: D.TACTICAL.PILOTS[side], unit: "count", range: [1, 6], integer: true, description: "Pilot stations at this side's GCS = max FPVs airborne at once, one C2 link each (floored at 1 by the engine)." };
+
+export const TACTICAL_SIDE_PARAMS = {
+  SORTIES: { BLUFOR: TACTICAL_SIDE_PARAM("SORTIES", "BLUFOR"), OPFOR: TACTICAL_SIDE_PARAM("SORTIES", "OPFOR") },
+  PILOTS: { BLUFOR: TACTICAL_SIDE_PARAM("PILOTS", "BLUFOR"), OPFOR: TACTICAL_SIDE_PARAM("PILOTS", "OPFOR") },
+};
+
 /* ------------------- zod schema built from the table ------------------- */
 
 function zodFromMeta(m: ParamMeta): z.ZodTypeAny {
+  if (m.boolean) {
+    return z.boolean().describe(`${m.description} Boolean. Default ${m.default}.`);
+  }
   let n = z.number().min(m.range[0]).max(m.range[1]);
   if (m.integer) n = n.int();
   return n.describe(`${m.description} Unit: ${m.unit}. Default ${m.default}, range [${m.range[0]}, ${m.range[1]}].`);
@@ -94,6 +121,17 @@ function sectionSchema<K extends string>(metas: SectionMeta<K>): z.ZodTypeAny {
   return z.object(shape).strict();
 }
 
+const tacticalShape: Record<string, z.ZodTypeAny> = {};
+for (const [key, meta] of Object.entries<ParamMeta>(TACTICAL_PARAMS)) tacticalShape[key] = zodFromMeta(meta).optional();
+tacticalShape.SORTIES = z.object({
+  BLUFOR: zodFromMeta(TACTICAL_SIDE_PARAMS.SORTIES.BLUFOR).optional(),
+  OPFOR: zodFromMeta(TACTICAL_SIDE_PARAMS.SORTIES.OPFOR).optional(),
+}).strict().optional();
+tacticalShape.PILOTS = z.object({
+  BLUFOR: zodFromMeta(TACTICAL_SIDE_PARAMS.PILOTS.BLUFOR).optional(),
+  OPFOR: zodFromMeta(TACTICAL_SIDE_PARAMS.PILOTS.OPFOR).optional(),
+}).strict().optional();
+
 export const configOverridesSchema = z.object({
   DRONE: sectionSchema(DRONE_PARAMS).optional(),
   CUAS: sectionSchema(CUAS_PARAMS).optional(),
@@ -102,17 +140,19 @@ export const configOverridesSchema = z.object({
     BLUFOR: sectionSchema(TEAM_PARAMS.BLUFOR).optional(),
     OPFOR: sectionSchema(TEAM_PARAMS.OPFOR).optional(),
   }).strict().optional(),
+  TACTICAL: z.object(tacticalShape).strict().optional(),
 }).strict()
-  .describe("Partial overrides of the simulation CONFIG. Unknown keys and out-of-range values are rejected. Get the full parameter table from get_config_schema.");
+  .describe("Partial overrides of the simulation CONFIG. Unknown keys and out-of-range values are rejected. Get the full parameter table from get_config_schema. The TACTICAL section only affects mode: \"tactical\" runs.");
 
 /* ---------------- get_config_schema tool payload ----------------------- */
 
 interface FlatParam {
   path: string;
-  default: number;
+  default: number | boolean;
   unit: string;
-  range: [number, number];
+  range: [number, number] | null;   // null for boolean parameters
   integer: boolean;
+  boolean?: boolean;
   description: string;
 }
 
@@ -121,8 +161,9 @@ function flatten(prefix: string, metas: Record<string, ParamMeta>): FlatParam[] 
     path: `${prefix}.${key}`,
     default: m.default,
     unit: m.unit,
-    range: m.range,
+    range: m.boolean ? null : m.range,
     integer: m.integer ?? false,
+    ...(m.boolean ? { boolean: true } : {}),
     description: m.description,
   }));
 }
@@ -131,20 +172,25 @@ export function buildConfigSchemaPayload() {
   return {
     description:
       "Tunable simulation parameters accepted in config_overrides, as a nested object mirroring these paths " +
-      '(e.g. {"TEAMS": {"OPFOR": {"videoOff": 7}}}). All values are numbers. Out-of-range values are rejected ' +
-      "with the offending path and allowed range.",
+      '(e.g. {"TEAMS": {"OPFOR": {"videoOff": 7}}}). All values are numbers except the flagged booleans ' +
+      "(TACTICAL.RESERVE_HUNTER). Out-of-range values are rejected with the offending path and allowed range. " +
+      'The TACTICAL.* section only affects runs with mode: "tactical".',
     parameters: [
       ...flatten("DRONE", DRONE_PARAMS),
       ...flatten("CUAS", CUAS_PARAMS),
       ...flatten("FIX", FIX_PARAMS),
       ...flatten("TEAMS.BLUFOR", TEAM_PARAMS.BLUFOR),
       ...flatten("TEAMS.OPFOR", TEAM_PARAMS.OPFOR),
+      ...flatten("TACTICAL", TACTICAL_PARAMS),
+      ...flatten("TACTICAL.SORTIES", TACTICAL_SIDE_PARAMS.SORTIES),
+      ...flatten("TACTICAL.PILOTS", TACTICAL_SIDE_PARAMS.PILOTS),
     ],
     not_overridable: [
       { path: "WORLD_M", reason: "Structural: unit emplacements are absolute coordinates tuned to the 4000 m box." },
       { path: "SIM_DT", reason: "Structural: the fixed 0.1 s tick is part of the determinism contract." },
       { path: "SEED", reason: "Pass the seed as a tool argument instead." },
       { path: "TEAMS.*.emconLabel", reason: "Derived: videoOff === 0 reports CONTINUOUS, anything else INTERMITTENT." },
+      { path: "TACTICAL.OBJ_NAME", reason: "Cosmetic label in the event log; not a number, not a behavior knob." },
     ],
     determinism_note:
       "Identical (seed, config_overrides) inputs always produce identical results — overrides change the engagement, not the reproducibility.",

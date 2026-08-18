@@ -34,13 +34,14 @@ One `<script>` block, organized top-down:
 | Terrain | Seeded value-noise elevation + canopy grids, clearings, a trail, coastline |
 | Terrain render | Offscreen canvases: hillshaded elevation layer + canopy overlay, drawn once per seed |
 | RF propagation | `pathAtten()` — terrain blocking + canopy loss along the sensor→emitter path |
-| Sim state | `state`, `makeTeam()`, `makeDrone()`, `resetSim()` |
-| Emissions | `uplinkActive()` / `videoActive()` — EMCON duty-cycle logic |
-| DF collect & fix | `doScans()` (intercepts → LOBs) and `updateFix()` (weighted least squares) |
-| Drone FSM | `stepDrone()` — STANDBY → TRANSIT → HOLD → COMMIT → TERMINAL → IMPACT |
-| Master step | `stepSim()` — fixed 0.1 s physics tick, phase tracking, end-of-match |
+| Sim state | `state`, `makeTeam()`, `makeDrone()`, `resetSim(seed, mode)` — shared emplacement, then the mode's air plan |
+| Emissions | `uplinkActive()` / `videoActive()` — EMCON duty-cycle logic (orbit mode) |
+| DF collect & fix | `collectUplinkLOBs()` / `collectDownlink()` (one scan of intercepts → LOBs / a drone track; both modes), `doScans()` (orbit mode), `updateFix()` (weighted least squares; both modes) |
+| Drone FSM | `stepDrone()` — STANDBY → TRANSIT → HOLD → COMMIT → TERMINAL → IMPACT (orbit mode); `attackGuidance()` — the COMMIT/TERMINAL attack run, both modes |
+| Master step | `stepSim()` — fixed 0.1 s physics tick, phase tracking, end-of-match (dispatches to `stepSimTactical()` in tactical mode) |
+| Tactical mode | `setupTactical()`, `uplinkActiveTac()` / `videoActiveTac()`, `doScansTactical()`, `stepTeamTactical()` (launch scheduler + hunter commit), `stepDroneTactical()`, `stepSimTactical()`, `endOfMatchTactical()` — see *Tactical mode* below |
 | Rendering | `draw()` and per-layer draw functions, world→screen transform |
-| UI | Detail panel, event log, click-to-select hit testing, controls, main rAF loop |
+| UI | Detail panel, event log, click-to-select hit testing, controls (mode switch, per-mode featured scenarios), main rAF loop |
 
 The main loop decouples wall clock from sim time: real frame time × playback
 speed accumulates into a bucket that is drained in fixed `SIM_DT = 0.1 s`
@@ -198,17 +199,147 @@ STANDBY → TRANSIT → HOLD → COMMIT → TERMINAL → IMPACT
 Steering is a turn-rate-limited (70°/s) heading controller with rate-limited
 speed and climb; movement is simple dead reckoning per 0.1 s tick.
 
+## Tactical mode
+
+`state.mode` selects one of two air plans on top of everything above:
+`"orbit"` — the original engagement, and the default whenever `resetSim(seed)`
+is called without a mode — or `"tactical"`. The Mode buttons and the
+`?mode=tactical` deep link select it; the mode survives Reset / Replay /
+Random, and the mode switch keeps the seed so the same emplacement can be
+watched under both plans. Terrain, RF, the DF sensor model, the WLS fix and
+its gates, and the terminal attack run are the same code in both modes; the
+`TACTICAL MODE` section of the script holds everything else, and nothing in
+it runs — or draws from the RNG — in orbit mode.
+
+### The scenario
+
+There is a ground fight both sides are supporting: a contested objective,
+**OBJ TANTO** (`CONFIG.TACTICAL.OBJ_*`), a 260 m circle midway between the
+two GCS, jittered per seed like the emplacements. Each side has a **strike
+package** of `SORTIES[side]` one-way FPV airframes (default 5) plus, with
+`RESERVE_HUNTER` on, one more held back as the **hunter-killer**; a GCS has
+`PILOTS[side]` pilot stations (default 2), each flying one airframe on one C2
+link, so at most that many can be airborne at once. The NAIs of orbit mode
+are still assigned (the DF effort still hunts the enemy GCS in its NAI), but
+the orbit's holding points are not computed and the orbit itself is not
+flown.
+
+The launch plan is fixed at reset: sortie 1 at `TEAMS.<side>.launchT`, then
+`LAUNCH_INTERVAL_S` ± `LAUNCH_JITTER_S` (uniform) apart, each airframe with
+its own EMCON phase offsets and an aim point scattered `AIM_SIGMA_M`
+(Gaussian) about the objective center and clamped inside it. Launches go in
+plan order when the planned time has come *and* a pilot station is free — a
+busy package slips its schedule.
+
+### Strike sortie FSM
+
+```
+STANDBY → TRANSIT (autonomous) → TERMINAL (manual) → IMPACT (expended)
+                    ↓ (GCS destroyed)
+                LINK LOST → DOWN
+```
+
+TRANSIT is cruise speed at transit altitude straight to the aim point;
+`STRIKE_TERMINAL_M` (380 m) out the pilot takes manual control and the
+airframe descends to terminal altitude at terminal speed and is expended on
+the aim point (`IMPACT_RANGE_M`), incrementing the side's **delivered**
+count. Battery drains at cruise rate throughout; LINK LOST works as in orbit
+mode. Nothing on the objective shoots back — sorties exist to be delivered
+and, above all, to *emit*.
+
+### Emissions
+
+`uplinkActiveTac()` keys the GCS uplink if any linked airframe needs it:
+continuously for one under manual control (COMMIT or TERMINAL), else in that
+airframe's window of the team's uplink duty cycle (`uplinkOn`/`uplinkOff`,
+per-airframe phase). With nothing airborne the GCS is silent. So the uplink
+is the OR of the package's schedules, plus ~10 s of continuous keying per
+sortie for the terminal run — the more a side flies, the more its GCS emits.
+`videoActiveTac()` is per airframe: continuous posture (`videoOff === 0`),
+manual control, or the airframe's burst window. The DF scan
+(`doScansTactical()`) is the orbit scan generalized: `collectUplinkLOBs()`
+against the enemy GCS when its uplink is up, then `collectDownlink()` against
+every enemy airframe whose video is up, keeping one track per airframe in
+`T.tracks`. The fix code is untouched.
+
+### The hunter-killer
+
+`stepTeamTactical()` launches the hunter when the team's fix on the enemy GCS
+meets the orbit-mode **commit gate** (`fixed`, ≥ `MIN_LOBS_COMMIT` LOBs, CEP
+< `COMMIT_CEP_M`), or — once the strike package is expended (every strike
+airframe launched, none airborne) with no emitter left to draw the enemy's
+attention — as a **final push** on the best fix held (CEP < `PUSH_CEP_M`),
+the bingo-fuel commit by another route. The hunter is the reserve airframe,
+or, with `RESERVE_HUNTER` off, the next unflown strike airframe *retasked*
+(it still counts as a sortie flown; if the package is already spent, no
+hunter is possible). It needs a pilot station: if every one is flying a
+sortie the commit **holds** (logged once per hold) until one frees, and the
+hunter then takes priority over the next strike launch; if the fix loosens
+back above the gate while the stations are busy, the hold is lifted. From
+launch it runs `attackGuidance()` — the same COMMIT dash, TERMINAL descent,
+visual acquisition, outward spiral and impact as the orbit drone — against
+the live fix. Impact destroys the enemy GCS, sets the winner, and every
+enemy airframe loses link; the enemy's package is grounded and its unflown
+airframes are logged. The winner's own sorties still airborne are held where
+they are — the fight is decided at the kill, and the strikes-delivered tally
+is final at that moment.
+
+### End states and phases
+
+Win: as orbit mode. **Stalemate** (new): a side is *quiet* when nothing of
+its is airborne, no strike airframe is unflown, and it holds no reserve
+hunter that could still go on the fix it has (CEP < `PUSH_CEP_M`); when both
+sides are quiet no emitter remains for either DF effort, neither fix can
+improve, and `state.stalemate` ends the match. Note the hunter-search corner
+case shared with orbit mode: a hunter launched on a bad fix spirals until
+its battery is gone — up to 20 min, during which its own continuous keying
+can get *its* GCS fixed. Phases: EMPLACEMENT → STRIKE SORTIES (first
+launch) → FIX → ATTACK (a hunter committed) → ENDEX. The HUD shows sorties
+flown of planned, airborne now, strikes delivered and the hunter's state; the
+GCS panel lists the airframes it is controlling and pilot-station usage; the
+end card carries the strikes-delivered tally.
+
+### RNG isolation
+
+Both modes share the main engagement stream up to and including the
+emplacement (team phase offsets, then GCS/DF jitter — `makeTeam()` and the
+first part of `resetSim()`), so a seed gives the same terrain and positions in
+either mode. Tactical mode then draws the objective jitter and, per airframe,
+its phase offsets, aim point and launch-spacing jitter; per-scan draws follow
+in scan order. Orbit mode's draw sequence is exactly what it was before the
+mode existed — the parity fixtures in fpv-sim-mcp regenerate identically —
+and the orbit code was only touched to extract three helpers verbatim
+(`collectUplinkLOBs`, `collectDownlink`, `attackGuidance`), reorder RNG-free
+lines in `resetSim()`, and add the mode dispatch.
+
+### Character
+
+Over seeds 1–200 with the defaults, the disciplined side wins 27%, the
+continuous emitter 15%, and 58% end in stalemate (mean decided fight ~7 min).
+The higher draw rate against orbit mode's 37% is structural — a package is
+spent in about seven minutes, a third of the orbit fight's exposure window —
+and package size moves it only slowly (8 sorties at 75 s spacing: 31/20/50);
+the seeds that stall are the ones whose sensor–GCS paths are heavily masked,
+and those stall in orbit mode too. The EMCON edge widens from 1.4:1 to
+1.8:1: with terminal keying forced on for both sides, the schedule still
+decides who is fixed first, and the intermittent side spends far less time
+on the air per sortie.
+
 ## Rendering
 
 - Terrain and canopy are rendered **once per seed** to 600×600 offscreen
   canvases (hillshade from NW light on the elevation grid, alpha-scaled green
   for canopy, plus a seeded speckle pass for texture) and blitted each frame.
-- Dynamic layers, in order: 500 m grid with labels, NAI boxes, RF range rings,
-  flight-path trails, expanding RF pulse rings on transmit, fading LOBs
-  (last 16, 30 s fade), enemy-drone track diamonds, error ellipses with CEP
-  readout, unit symbols, explosion rings, map furniture (north arrow, 500 m
-  scale bar, AO label), team status HUD cards (upper corners: drone state,
-  battery, LOB count, fix CEP, engagement status), selection ring.
+- Dynamic layers, in order: 500 m grid with labels, NAI boxes (plus the
+  objective ring in tactical mode), RF range rings, flight-path trails (one
+  per airframe; expended/downed ones fainter), expanding RF pulse rings on
+  transmit, fading LOBs (last 16, 30 s fade), enemy-drone track diamonds
+  (one per tracked airframe), error ellipses with CEP readout, unit symbols
+  (the hunter-killer ringed), explosion rings (GCS kill 260 m, strike impact
+  110 m), map furniture (north arrow, 500 m scale bar, AO label), team status
+  HUD cards (upper corners: drone state and battery — or, in tactical mode,
+  sorties flown/airborne, strikes delivered and hunter state — LOB count,
+  fix CEP, engagement status), selection ring.
 - World coordinates are meters with north up; `W2S()` flips Y for screen
   space. Canvas is DPI-aware (`devicePixelRatio` transform). The view uses a
   **cover fit**: it fills the pane and crops the square world's empty

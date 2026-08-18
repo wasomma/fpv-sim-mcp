@@ -8,11 +8,13 @@
 export const MODEL_DESCRIPTION = {
   overview:
     "Force-on-force engagement between two symmetric teams on a 4000 m x 4000 m notional jungle/coastal box " +
-    "(AO KATANA). Each team fields one ground control station (GCS, the target), two passive counter-UAS RF " +
-    "direction-finding nodes, and one armed FPV sUAS. Teams hunt each other's GCS by its RF emissions: LOBs " +
-    "accumulate into a geolocation fix, the drone dashes to the fix and strikes. Destroying the enemy GCS severs " +
-    "their drone's C2 link (it crashes shortly after), which is why the GCS is the win condition. The one " +
-    "asymmetry in the default configuration is EMCON posture: BLUFOR keys intermittently, OPFOR nearly " +
+    "(AO KATANA). Each team fields one ground control station (GCS, the target) and two passive counter-UAS RF " +
+    "direction-finding nodes. Teams hunt each other's GCS by its RF emissions: LOBs accumulate into a " +
+    "geolocation fix, and an armed FPV strikes the fix. Destroying the enemy GCS severs their airframes' C2 links " +
+    "(they crash shortly after), which is why the GCS is the win condition. Two selectable engagement plans " +
+    '(the mode input): "orbit" — one FPV per side holds a forward orbit while the fix builds, then dashes — and ' +
+    '"tactical" — each side flies a package of one-way strike sorties into a shared objective (see tactical_mode). ' +
+    "The one asymmetry in the default configuration is EMCON posture: BLUFOR keys intermittently, OPFOR nearly " +
     "continuously. All data is notional and unclassified.",
 
   determinism:
@@ -94,17 +96,50 @@ export const MODEL_DESCRIPTION = {
     "eyes on, so video forces on regardless of posture — even the disciplined side becomes loud in the endgame. " +
     "The teaching point of the default configuration: the side that transmits less is harder to fix.",
 
+  tactical_mode: {
+    plan:
+      "mode: \"tactical\" replaces the hold-orbit air plan with a sortie stream on the same terrain, sensors, fix " +
+      "math and terminal guidance. Each side pushes a package of one-way FPV strike sorties (default 5, plus one " +
+      "airframe held in reserve as a hunter-killer; 2 pilot stations = 2 airborne at once) into a shared contested " +
+      "objective, OBJ TANTO, midway between the GCS. Strikes fly autonomously to a per-sortie aim point scattered " +
+      "inside the objective (AIM_SIGMA_M), then hand to manual terminal control inside STRIKE_TERMINAL_M.",
+    emissions:
+      "Every sortie keys its GCS's C2 uplink — per the team's EMCON schedule (a per-airframe phase offset) while " +
+      "transiting autonomously, continuously once the pilot takes manual control for the terminal run — so the " +
+      "more a side flies, the more its GCS emits, and the enemy DF nodes fix it sortie by sortie. Video downlink " +
+      "duty cycles are likewise per airframe.",
+    hunter_killer:
+      "When a side's fix meets the commit gate (same thresholds as orbit) its reserve hunter-killer launches " +
+      "against the fix, needing a free pilot station (a commit can be HELD until one frees; the hold lifts if the " +
+      "fix loosens again). With RESERVE_HUNTER false the next unflown strike airframe is retasked instead. Once a " +
+      "side's strike package is expended with nothing airborne, it launches on the best fix it holds if CEP < " +
+      "PUSH_CEP_M (the final push — orbit's bingo-fuel commit by another route). The hunter flies the shared " +
+      "attack-run guidance (COMMIT dash, TERMINAL visual acquire / spiral search).",
+    end_states:
+      "Win: enemy GCS destroyed, as in orbit (the winner's remaining strikes freeze at the kill, so the tally is " +
+      "the tally at that moment; the loser's airframes play out their link loss). Draw: STALEMATE with reason " +
+      "packages_expended when both packages are spent and neither side can launch a hunter — no emitter left for " +
+      "either DF effort to work. Strikes delivered on the objective are tallied per side.",
+    baseline:
+      "Over seeds 1-200 under stock configuration the disciplined side wins 27%, the continuous emitter 15%, and " +
+      "58% stall out; the shorter engagement window (a package is spent in ~7 min) draws more often than the " +
+      "20-minute orbit fight, and the EMCON edge widens from 1.4:1 to 1.8:1.",
+  },
+
   outcomes:
-    "BLUFOR or OPFOR win by destroying the enemy GCS (reason gcs_destroyed). Headless runs additionally end in " +
-    "STALEMATE when both drones are down (no future state change is possible) or at the sim-time cap (3600 s). " +
-    "Roughly 30% of random seeds are genuine stalemates under the honest estimator: disciplined emissions plus " +
-    "imperfect DF geometry legitimately deny a fix. That rate is a finding of the original development, not a bug.",
+    "BLUFOR or OPFOR win by destroying the enemy GCS (reason gcs_destroyed). Headless orbit runs additionally end " +
+    "in STALEMATE when both drones are down (no future state change is possible) or at the sim-time cap (3600 s); " +
+    "tactical runs end in STALEMATE with reason packages_expended (the sim's own end state, see tactical_mode). " +
+    "Roughly 30% of random orbit seeds (and ~58% of tactical seeds) are genuine stalemates under the honest " +
+    "estimator: disciplined emissions plus imperfect DF geometry legitimately deny a fix. Those rates are " +
+    "findings of the original development, not bugs.",
 
   known_simplifications: [
     "No jamming, spoofing, or kinetic counter-fire against the drones — the cUAS side is sense-only; the counter comes from the friendly FPV strike.",
     "Frequency references (915 MHz, 5.8 GHz) are cosmetic log flavor, not an RF link budget; propagation is the geometric attenuation model above.",
-    "One drone per side, one sortie, no reloads or battery swaps.",
-    "DF nodes are omniscient about signal identity (no false correlation between the two enemy emitter types, no clutter/ambient emitters).",
+    "Orbit mode: one drone per side, one sortie, no reloads or battery swaps. Tactical mode: a finite package with no reloads; strikes are one-way.",
+    "Tactical mode models no ground combat at the objective — strikes delivered are tallied, not adjudicated; the objective is the reason both sides emit, not a second win condition.",
+    "DF nodes are omniscient about signal identity (no false correlation between enemy emitter types or airframes, no clutter/ambient emitters).",
     "Flat-earth geometry within the 4 km box; bearings are planar.",
   ],
 
