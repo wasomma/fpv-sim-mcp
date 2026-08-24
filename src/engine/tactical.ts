@@ -278,7 +278,7 @@ export function stepDroneTactical(sim: SimCtx, T: Team, d: Drone, dt: number): v
     }
   }
 
-  steerToward(d, want.x, want.y, dt, D.TURN_DPS);
+  steerToward(sim, d, want.x, want.y, dt);
   d.spd = d.spd + clamp(want.spd - d.spd, -6 * dt, 6 * dt);
   d.agl = d.agl + clamp(want.agl - d.agl, -D.CLIMB_MPS * dt, D.CLIMB_MPS * dt);
   moveDrone(sim, d, dt);

@@ -10,6 +10,41 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+Engine sync with upstream's bounded hunter search (fpv-sim PR #28, upstream
+commit `d215c70`): a Behavior-changing upstream fix, so the golden fixtures
+regenerate against that commit. Orbit behavior is unchanged — the orbit
+set's runs regenerate byte-identically and only its `_meta` pin advances;
+in the tactical set only seed 5 differs (the same BLUFOR search-recovery
+kill, 8.8 s later, plus the new search-start log line). Parity re-verified
+against the vm-run browser sim over seeds 1–500, both modes,
+float-for-float.
+
+### Changed
+- **Bounded terminal search and AO-edge-aware steering**, mirroring
+  upstream `index.html`: a no-joy terminal search is now an expanding
+  orbit around the live fix — radius steps `SEARCH_RING_M` (170 m, inside
+  visual range) per revolution at `SEARCH_MPS` (24 m/s), bounded to
+  `SEARCH_CEP_MULT` (2×) the current CEP within [`ACQ_RANGE_M`,
+  `SEARCH_MAX_R_M`], re-sweeping from the center on a completed no-joy
+  pattern, with the search start logged (`AT FIX NO VISUAL // COMMENCING
+  EXPANDING SEARCH`) — instead of an unbounded spiral (+22 m/s forever)
+  that left a missed hunter riding the world-edge clamp around the whole
+  AO. `steerToward` now confines every commanded steering point
+  `EDGE_MARGIN_M` (150 m) inside the AO and takes the sim context instead
+  of a bare turn rate. `TERMINAL_SEARCH_GROW` is retired; the five new
+  `DRONE` knobs join the parameter table, validation and
+  `get_config_schema`; `describe_model`'s drone-behavior text matches the
+  new code.
+
+### Docs
+- `docs/upstream/DESIGN_NOTES.md` re-synced to upstream `e597c83`
+  (SNAPSHOT.md pin advanced): the TERMINAL bullet now describes the
+  bounded search, the steering paragraph the edge confinement, the
+  tactical hunter paragraph drops its stray "outward spiral" (upstream
+  PR #29), plus the OBJ TANTO naming note upstream added since
+  `843a2c5`. The fixtures' own pin stays at `d215c70`, the commit whose
+  `index.html` they were generated from — #29 was docs-only.
+
 ## [0.3.0] — 2026-08-18
 
 The tactical-mode port: the engine now covers both of upstream's engagement

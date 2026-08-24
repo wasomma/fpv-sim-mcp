@@ -30,7 +30,11 @@ export interface DroneConfig {
   HOLD_STANDOFF_M: number;   // Holding orbit sits this far forward of own GCS toward the NAI.
   HOLD_RADIUS_M: number;     // Holding-orbit radius.
   ACQ_RANGE_M: number;       // Range at which FPV operator visually IDs the GCS.
-  TERMINAL_SEARCH_GROW: number; // Expanding-search radius growth, m/s, when no joy at fix.
+  SEARCH_MPS: number;        // Visual-search airspeed over the fix area (slow enough to actually scan).
+  SEARCH_RING_M: number;     // Expanding-search ring spacing per revolution; under ACQ_RANGE_M so rings overlap visually.
+  SEARCH_CEP_MULT: number;   // Search no farther out than this multiple of the current fix CEP...
+  SEARCH_MAX_R_M: number;    // ...and never beyond this radius; a completed no-joy pattern re-sweeps from the center.
+  EDGE_MARGIN_M: number;     // Steering targets are confined this far inside the AO edge (turn before the boundary).
   IMPACT_RANGE_M: number;    // Detonation range.
   WPT_RADIUS_M: number;      // Waypoint capture radius.
 }
@@ -119,7 +123,11 @@ export const DEFAULT_CONFIG: SimConfig = {
     HOLD_STANDOFF_M: 600,
     HOLD_RADIUS_M: 130,
     ACQ_RANGE_M: 220,
-    TERMINAL_SEARCH_GROW: 22,
+    SEARCH_MPS: 24,
+    SEARCH_RING_M: 170,
+    SEARCH_CEP_MULT: 2,
+    SEARCH_MAX_R_M: 650,
+    EDGE_MARGIN_M: 150,
     IMPACT_RANGE_M: 9,
     WPT_RADIUS_M: 70,
   },
