@@ -20,16 +20,26 @@ import type { SimCtx } from "./context.js";
 // "BLUFOR-sUAS-1" -> "sUAS-1".
 export const shortId = (T: Team, d: Drone): string => d.id.slice(T.side.length + 1);
 
-export function steerToward(d: Drone, tx: number, ty: number, dt: number, turnDps: number): void {
-  const want = brgTo(d.x, d.y, tx, ty);
+export function steerToward(sim: SimCtx, d: Drone, tx: number, ty: number, dt: number): void {
+  // The AO boundary is flown, not hit: a commanded point outside (or
+  // hugging) the edge is pulled EDGE_MARGIN_M inside it before the bearing
+  // is taken, so the drone turns back ahead of the boundary instead of
+  // pinning against the world clamp and sliding along it. Every real
+  // objective (GCS, aim points, hold orbits) sits well inside the margin;
+  // only synthetic points — a search orbit, a wild fix — are ever moved.
+  const D = sim.config.DRONE, m = D.EDGE_MARGIN_M;
+  const want = brgTo(d.x, d.y, clamp(tx, m, sim.world.size - m), clamp(ty, m, sim.world.size - m));
   const diff = normAng(want - d.hdg);
-  const maxTurn = d2r(turnDps) * dt;
+  const maxTurn = d2r(D.TURN_DPS) * dt;
   d.hdg = normAng(d.hdg + clamp(diff, -maxTurn, maxTurn));
 }
 
 export function moveDrone(sim: SimCtx, d: Drone, dt: number): void {
   d.x += Math.sin(d.hdg) * d.spd * dt;
   d.y += Math.cos(d.hdg) * d.spd * dt;
+  // World-edge clamp is a last-resort invariant only: steering confines
+  // its targets EDGE_MARGIN_M inside the AO, so flight turns back with
+  // room to spare and never rides this.
   d.x = clamp(d.x, 30, sim.world.size - 30);
   d.y = clamp(d.y, 30, sim.world.size - 30);
 }
@@ -44,10 +54,12 @@ export interface GuidanceWant { x: number; y: number; spd: number; agl: number; 
  * COMMIT dashes to the current fix and hands off to TERMINAL 380 m out;
  * TERMINAL descends below canopy, acquires visually inside ACQ_RANGE_M and
  * homes on the GCS, or — having reached the fix without acquiring — flies
- * an expanding search outward (an outward spiral: radius grows
- * TERMINAL_SEARCH_GROW m/s while the tangential rate is pinned to
- * TERMINAL_MPS). Fills `want` and returns true when the drone impacted this
- * step, in which case the caller must not move it.
+ * a bounded expanding search: an orbit around the live fix at SEARCH_MPS
+ * whose radius steps SEARCH_RING_M per revolution, out to SEARCH_CEP_MULT
+ * times the current CEP (clamped to [ACQ_RANGE_M, SEARCH_MAX_R_M]),
+ * re-sweeping from the center on a completed no-joy pattern. Fills `want`
+ * and returns true when the drone impacted this step, in which case the
+ * caller must not move it.
  */
 export function attackGuidance(sim: SimCtx, T: Team, d: Drone, E: Team, dt: number, want: GuidanceWant): boolean {
   const D = sim.config.DRONE, label = shortId(T, d);
@@ -80,18 +92,32 @@ export function attackGuidance(sim: SimCtx, T: Team, d: Drone, E: Team, dt: numb
   } else {
     // Drive to the fix center first. Only once the drone has reached the
     // estimated point without acquiring (a fix error larger than sensor
-    // range) does the operator fly the expanding search outward. A modest
-    // error is recovered quickly; a gross error (a geometrically weak fix
-    // that slipped the commit gate) burns battery.
+    // range) does the operator fly an expanding visual search outward: an
+    // orbit around the live fix whose radius steps SEARCH_RING_M per
+    // revolution — inside visual range, so successive rings overlap — out
+    // to SEARCH_CEP_MULT times the current CEP. The operator sweeps where
+    // the target can plausibly be, not the AO; a completed pattern with no
+    // joy re-flies from the center, and the fix keeps refining underneath,
+    // so each pass is better centered. A modest fix error is recovered
+    // within a revolution or two; a gross one (a geometrically weak fix
+    // that slipped the commit gate) burns battery searching.
     const d2fix = dist(d.x, d.y, T.est.p!.x, T.est.p!.y);
     if (d2fix > D.WPT_RADIUS_M && !d.fixReached) {
       want.x = T.est.p!.x; want.y = T.est.p!.y;   // still inbound to the fix
     } else {
-      d.fixReached = true;
-      d.searchR = (d.searchR || 0) + dt * D.TERMINAL_SEARCH_GROW;
-      d.orbitA += dt * (D.TERMINAL_MPS / Math.max(40, d.searchR));
+      if (!d.fixReached) {
+        d.fixReached = true;
+        sim.addEvent(T.side, label + " AT FIX NO VISUAL // COMMENCING EXPANDING SEARCH // CEP " +
+          Math.round(T.est.cep) + "M");
+      }
+      const maxR = clamp(T.est.cep * D.SEARCH_CEP_MULT, D.ACQ_RANGE_M, D.SEARCH_MAX_R_M);
+      const w = D.SEARCH_MPS / Math.max(60, d.searchR);
+      d.orbitA += dt * w;
+      d.searchR += dt * w * (D.SEARCH_RING_M / (2 * Math.PI));
+      if (d.searchR > maxR) d.searchR = 0;      // pattern complete: re-sweep
       want.x = T.est.p!.x + Math.sin(d.orbitA) * d.searchR;
       want.y = T.est.p!.y + Math.cos(d.orbitA) * d.searchR;
+      want.spd = D.SEARCH_MPS;
     }
   }
   return false;
@@ -185,7 +211,7 @@ export function stepDrone(sim: SimCtx, T: Team, dt: number): void {
     targetX = want.x; targetY = want.y; wantSpd = want.spd; wantAgl = want.agl;
   }
 
-  steerToward(d, targetX, targetY, dt, D.TURN_DPS);
+  steerToward(sim, d, targetX, targetY, dt);
   d.spd = d.spd + clamp(wantSpd - d.spd, -6 * dt, 6 * dt);
   d.agl = d.agl + clamp(wantAgl - d.agl, -D.CLIMB_MPS * dt, D.CLIMB_MPS * dt);
   moveDrone(sim, d, dt);

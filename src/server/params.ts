@@ -44,7 +44,11 @@ export const DRONE_PARAMS: SectionMeta<keyof typeof D.DRONE> = {
   HOLD_STANDOFF_M:  { default: D.DRONE.HOLD_STANDOFF_M, unit: "m", range: [100, 1500], description: "Holding orbit sits this far forward of own GCS toward the NAI." },
   HOLD_RADIUS_M:    { default: D.DRONE.HOLD_RADIUS_M, unit: "m", range: [50, 400], description: "Holding-orbit radius." },
   ACQ_RANGE_M:      { default: D.DRONE.ACQ_RANGE_M, unit: "m", range: [50, 600], description: "Range at which the FPV operator visually IDs the GCS in the terminal phase." },
-  TERMINAL_SEARCH_GROW: { default: D.DRONE.TERMINAL_SEARCH_GROW, unit: "m/s", range: [5, 60], description: "Expanding-search radius growth when nothing is acquired at the fix point." },
+  SEARCH_MPS:       { default: D.DRONE.SEARCH_MPS, unit: "m/s", range: [5, 60], description: "Visual-search airspeed over the fix area when nothing is acquired at the fix point." },
+  SEARCH_RING_M:    { default: D.DRONE.SEARCH_RING_M, unit: "m", range: [40, 600], description: "Ring spacing per revolution of the expanding search orbit; keep it under ACQ_RANGE_M so successive rings overlap visually." },
+  SEARCH_CEP_MULT:  { default: D.DRONE.SEARCH_CEP_MULT, unit: "multiplier", range: [1, 5], description: "Maximum search radius as a multiple of the current fix CEP (floored at ACQ_RANGE_M)." },
+  SEARCH_MAX_R_M:   { default: D.DRONE.SEARCH_MAX_R_M, unit: "m", range: [200, 2000], description: "Absolute cap on the search radius; a completed no-joy pattern re-sweeps from the center." },
+  EDGE_MARGIN_M:    { default: D.DRONE.EDGE_MARGIN_M, unit: "m", range: [50, 500], description: "Commanded steering points are confined this far inside the AO edge, so flight turns back ahead of the boundary." },
   IMPACT_RANGE_M:   { default: D.DRONE.IMPACT_RANGE_M, unit: "m", range: [3, 30], description: "Detonation range." },
   WPT_RADIUS_M:     { default: D.DRONE.WPT_RADIUS_M, unit: "m", range: [20, 200], description: "Waypoint capture radius." },
 };

@@ -84,10 +84,13 @@ export const MODEL_DESCRIPTION = {
     "HOLD_STANDOFF_M forward of own GCS toward the named area of interest; orbit at LOITER_MPS with a 0.62x " +
     "battery drain while the ground nodes build the fix; dash at DASH_MPS on commit; inside 380 m of the estimate " +
     "descend below canopy at TERMINAL_MPS; visually acquire the real GCS within ACQ_RANGE_M (220 m); if the drone " +
-    "reaches the fix point without acquiring, it flies an outward spiral search (radius growing " +
-    "TERMINAL_SEARCH_GROW m/s, tangential speed held at TERMINAL_MPS; a steep spiral, not repeated laps) — a " +
-    "modest fix error is recovered quickly, a gross one burns the battery. Steering is a turn-rate-limited " +
-    "heading controller with rate-limited speed and climb; movement is dead reckoning per 0.1 s tick.",
+    "reaches the fix point without acquiring (logged AT FIX NO VISUAL), it flies a bounded expanding search: an " +
+    "orbit around the live fix at SEARCH_MPS whose radius steps SEARCH_RING_M per revolution (inside visual range, " +
+    "so rings overlap), out to SEARCH_CEP_MULT times the current CEP — clamped to [ACQ_RANGE_M, SEARCH_MAX_R_M] — " +
+    "re-sweeping from the center on a completed no-joy pattern; a modest fix error is recovered within a " +
+    "revolution or two, a gross one burns the battery searching. Steering is a turn-rate-limited heading " +
+    "controller with rate-limited speed and climb, its commanded points confined EDGE_MARGIN_M inside the AO so " +
+    "flight turns back ahead of the world edge; movement is dead reckoning per 0.1 s tick.",
 
   emcon_model:
     "Each team's C2 uplink and video downlink follow on/off duty cycles with a per-seed random phase offset. A " +
@@ -114,7 +117,7 @@ export const MODEL_DESCRIPTION = {
       "fix loosens again). With RESERVE_HUNTER false the next unflown strike airframe is retasked instead. Once a " +
       "side's strike package is expended with nothing airborne, it launches on the best fix it holds if CEP < " +
       "PUSH_CEP_M (the final push — orbit's bingo-fuel commit by another route). The hunter flies the shared " +
-      "attack-run guidance (COMMIT dash, TERMINAL visual acquire / spiral search).",
+      "attack-run guidance (COMMIT dash, TERMINAL visual acquire / bounded expanding search).",
     end_states:
       "Win: enemy GCS destroyed, as in orbit (the winner's remaining strikes freeze at the kill, so the tally is " +
       "the tally at that moment; the loser's airframes play out their link loss). Draw: STALEMATE with reason " +
