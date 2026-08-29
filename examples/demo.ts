@@ -108,4 +108,36 @@ for (const v of [cmp.variant_a, cmp.variant_b]) {
 console.log(`\noutcome flips across the same 200 seeds: ${cmp.paired.flips_total}`);
 console.log(`\nsummary:\n${cmp.summary}`);
 
+/* ---------------- 3. tactical mode: the sortie stream ---------------- */
+
+console.log();
+console.log("=".repeat(72));
+console.log("run_engagement // mode tactical // seed 12 (featured: Standard Engagement)");
+console.log("=".repeat(72));
+
+interface TacticalRunResult extends RunResult {
+  objective: { name: string; grid: string };
+  teams: Record<string, RunResult["teams"][string] & {
+    tactical: {
+      sorties_planned: number; flown: number; delivered: number;
+      hunter: { id: string; end_state: string } | null;
+    };
+  }>;
+}
+
+const tac = parseTool<TacticalRunResult>(
+  await client.callTool({ name: "run_engagement", arguments: { seed: 12, mode: "tactical" } }),
+);
+
+console.log(`outcome : ${tac.outcome.result} (${tac.outcome.reason}) at T+${tac.duration_s}s // ${tac.objective.name} ${tac.objective.grid}`);
+for (const [side, t] of Object.entries(tac.teams)) {
+  console.log(
+    `${side.padEnd(6)} : EMCON ${t.emcon_label.padEnd(12)} fix@${String(t.fix_established_t_s ?? "--").padStart(6)}s ` +
+    `hunter@${String(t.commit_t_s ?? "--").padStart(6)}s LOBs ${String(t.lobs_held).padStart(3)} ` +
+    `sorties ${t.tactical.flown}/${t.tactical.sorties_planned} delivered ${t.tactical.delivered}  ` +
+    `HK ${t.tactical.hunter ? t.tactical.hunter.end_state : "none"}`,
+  );
+}
+console.log("\nphases  :", tac.phase_timeline.map((p) => `${p.phase} @ ${p.t}s`).join(" -> "));
+
 await client.close();

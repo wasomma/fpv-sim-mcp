@@ -67,6 +67,25 @@ export interface TeamEmconConfig {
   launchT: number;
 }
 
+// TACTICAL mode only (mode === "tactical"; see tactical.ts). Each side pushes
+// a package of one-way FPV strike sorties into a shared objective while its
+// DF nodes hunt the enemy GCS; a reserved hunter-killer launches on the fix.
+// ORBIT mode never reads this block. TEAMS.<side>.launchT doubles as each
+// side's first strike launch time.
+export interface TacticalConfig {
+  OBJ_X: number;             // Contested objective (the supported ground fight), midway between the GCS; jittered per seed like the emplacements.
+  OBJ_Y: number;
+  OBJ_RADIUS_M: number;      // Objective radius; strike aim points are scattered inside it.
+  OBJ_NAME: string;
+  SORTIES: { BLUFOR: number; OPFOR: number };  // Strike airframes per side (one-way; expended on impact).
+  PILOTS: { BLUFOR: number; OPFOR: number };   // Pilot stations per GCS = max FPVs airborne at once, one C2 link each.
+  RESERVE_HUNTER: boolean;   // Hold one extra FPV back as the dedicated GCS hunter-killer. false: the next unflown strike airframe is retasked when the fix commits.
+  LAUNCH_INTERVAL_S: number; // Nominal spacing between strike launches.
+  LAUNCH_JITTER_S: number;   // +/- uniform jitter on that spacing, drawn per sortie at reset.
+  STRIKE_TERMINAL_M: number; // A strike sortie hands from autonomous transit to manual terminal this far from its aim point.
+  AIM_SIGMA_M: number;       // 1-sigma scatter of aim points about the objective center.
+}
+
 export interface SimConfig {
   WORLD_M: number;           // Map is WORLD_M x WORLD_M meters.
   SIM_DT: number;            // Physics step, sim seconds.
@@ -74,6 +93,7 @@ export interface SimConfig {
   CUAS: CuasConfig;
   FIX: FixConfig;
   TEAMS: { BLUFOR: TeamEmconConfig; OPFOR: TeamEmconConfig };
+  TACTICAL: TacticalConfig;
 }
 
 export const DEFAULT_SEED = 20260719; // Deterministic seed. Same seed -> same engagement.
@@ -129,6 +149,19 @@ export const DEFAULT_CONFIG: SimConfig = {
     BLUFOR: { uplinkOn: 4, uplinkOff: 13, videoOn: 3, videoOff: 7, launchT: 20 },
     OPFOR: { uplinkOn: 10, uplinkOff: 4, videoOn: 1, videoOff: 0, launchT: 26 },
   },
+
+  TACTICAL: {
+    OBJ_X: 1830, OBJ_Y: 1975,
+    OBJ_RADIUS_M: 260,
+    OBJ_NAME: "OBJ TANTO",
+    SORTIES: { BLUFOR: 5, OPFOR: 5 },
+    PILOTS:  { BLUFOR: 2, OPFOR: 2 },
+    RESERVE_HUNTER: true,
+    LAUNCH_INTERVAL_S: 90,
+    LAUNCH_JITTER_S: 20,
+    STRIKE_TERMINAL_M: 380,
+    AIM_SIGMA_M: 90,
+  },
 };
 
 export type EmconLabel = "INTERMITTENT" | "CONTINUOUS";
@@ -144,15 +177,33 @@ export const emconLabel = (team: TeamEmconConfig): EmconLabel =>
  * emplacements are absolute coordinates tuned to the 4000 m box, and the
  * fixed 0.1 s tick is part of the determinism contract.
  */
+/*
+ * TACTICAL overrides: the objective's position and name are structural (the
+ * objective sits between the fixed emplacements, and the name is a label),
+ * so only the package/plan knobs are overridable. Read only in tactical mode.
+ */
+export interface TacticalOverrides {
+  OBJ_RADIUS_M?: number;
+  SORTIES?: { BLUFOR?: number; OPFOR?: number };
+  PILOTS?: { BLUFOR?: number; OPFOR?: number };
+  RESERVE_HUNTER?: boolean;
+  LAUNCH_INTERVAL_S?: number;
+  LAUNCH_JITTER_S?: number;
+  STRIKE_TERMINAL_M?: number;
+  AIM_SIGMA_M?: number;
+}
+
 export interface ConfigOverrides {
   DRONE?: Partial<DroneConfig>;
   CUAS?: Partial<CuasConfig>;
   FIX?: Partial<FixConfig>;
   TEAMS?: { BLUFOR?: Partial<TeamEmconConfig>; OPFOR?: Partial<TeamEmconConfig> };
+  TACTICAL?: TacticalOverrides;
 }
 
 export function mergeConfig(overrides?: ConfigOverrides): SimConfig {
   const d = DEFAULT_CONFIG;
+  const t = overrides?.TACTICAL;
   return {
     WORLD_M: d.WORLD_M,
     SIM_DT: d.SIM_DT,
@@ -162,6 +213,12 @@ export function mergeConfig(overrides?: ConfigOverrides): SimConfig {
     TEAMS: {
       BLUFOR: { ...d.TEAMS.BLUFOR, ...overrides?.TEAMS?.BLUFOR },
       OPFOR: { ...d.TEAMS.OPFOR, ...overrides?.TEAMS?.OPFOR },
+    },
+    TACTICAL: {
+      ...d.TACTICAL,
+      ...t,
+      SORTIES: { ...d.TACTICAL.SORTIES, ...t?.SORTIES },
+      PILOTS: { ...d.TACTICAL.PILOTS, ...t?.PILOTS },
     },
   };
 }

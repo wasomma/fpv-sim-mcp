@@ -30,6 +30,7 @@ function mkResult(
   });
   return {
     seed,
+    mode: "orbit",
     outcome: {
       result,
       reason: reason ?? (result === "STALEMATE" ? "time_limit" : "gcs_destroyed"),

@@ -10,6 +10,50 @@ explicitly and records the commit in `docs/upstream/SNAPSHOT.md`.
 
 ## [Unreleased]
 
+Tactical mode ported: the engine, tools and fixtures now cover both of
+upstream's engagement plans. Golden fixtures regenerated against upstream
+`843a2c5` (fpv-sim PR #24, which added the mode) — the five orbit runs are
+unchanged apart from the new `mode` tag; six tactical runs are added.
+
+### Added
+- **Tactical mode** (`mode: "tactical"` on `run_engagement`, `sweep_seeds`
+  and `compare_configs`; default `"orbit"`, the original engagement).
+  `src/engine/tactical.ts` is the port of upstream's `TACTICAL MODE`
+  section: each side flies a package of one-way FPV strike sorties into a
+  shared objective (OBJ TANTO) while its DF nodes hunt the enemy GCS; every
+  sortie keys the GCS uplink, so the more a side flies the more it emits; a
+  reserved hunter-killer launches on the commit gate (or, once the package
+  is spent, on the best fix held); the sim declares its own STALEMATE when
+  both packages are expended and no hunter can launch (new outcome reason
+  `packages_expended`). `Simulation(seed, overrides, mode)` /
+  `runEngagement(seed, overrides, { mode })` in the engine API. Results
+  carry `mode`, a per-team `tactical` block (sorties planned/flown, strikes
+  delivered, pilot stations, the hunter's fate, every airframe's end
+  state) and the `objective`; `drone` is `null` in tactical mode.
+- `TACTICAL.*` in the parameter table and `config_overrides`
+  (`OBJ_RADIUS_M`, `RESERVE_HUNTER` — the table's first boolean —
+  `LAUNCH_INTERVAL_S`, `LAUNCH_JITTER_S`, `STRIKE_TERMINAL_M`,
+  `AIM_SIGMA_M`, and per-side `SORTIES` / `PILOTS`); the objective's
+  position and name are listed as not overridable. Read only in tactical
+  mode.
+- `describe_model` gains a `tactical_mode` section (scenario, strike
+  sortie, hunter-killer, end states, character) and mode-aware wording
+  elsewhere.
+- Golden fixtures cover both modes in the one file (`runs[].mode`; orbit
+  first), so the `upstream-drift` gate here and fpv-sim's `parity` gate
+  cover tactical mode with no workflow change. `test/golden.test.ts`
+  checks the tactical package airframe by airframe; 24 tests.
+- `npm run demo` adds a tactical `run_engagement` call.
+
+### Changed
+- Engine: `collectUplinkLOBs`, `collectDownlink` (`sensing.ts`) and
+  `attackGuidance` (`drone.ts`) extracted from the orbit paths exactly as
+  upstream did, and shared with tactical mode; `Team.drone` is now
+  `Drone | null`. Orbit-mode behavior, RNG order and event text are
+  unchanged (the five orbit goldens reproduce byte-identically).
+- `docs/upstream/DESIGN_NOTES.md` re-synced to upstream `843a2c5`
+  (`SNAPSHOT.md` updated).
+
 ## [0.2.3] — 2026-08-16
 
 No engine or tool behavior changes; golden fixtures unchanged. CI and

@@ -3,18 +3,22 @@
  *
  * Extracted from https://github.com/wasomma/fpv-sim (index.html) with
  * simulation behavior preserved exactly: the same seed produces the same
- * engagement, tick for tick, as the browser version. All data is notional.
+ * engagement, tick for tick, as the browser version, in either engagement
+ * mode ("orbit", the original and the default, or "tactical"). All data is
+ * notional.
  */
 
 export { Simulation, runEngagement, MAX_SIM_S_DEFAULT } from "./simulation.js";
 export type {
-  EngagementResult, TeamResult, TeamFixResult, TeamNodeResult, PhaseChange, RunOptions,
+  EngagementResult, TeamResult, TeamFixResult, TeamNodeResult, TeamTacticalResult, TeamAirframeResult,
+  ObjectiveResult, PhaseChange, RunOptions,
 } from "./simulation.js";
 export {
   DEFAULT_CONFIG, DEFAULT_SEED, mergeConfig, emconLabel,
 } from "./config.js";
 export type {
-  SimConfig, ConfigOverrides, DroneConfig, CuasConfig, FixConfig, TeamEmconConfig, EmconLabel,
+  SimConfig, ConfigOverrides, DroneConfig, CuasConfig, FixConfig, TeamEmconConfig, TacticalConfig,
+  TacticalOverrides, EmconLabel,
 } from "./config.js";
 export { aggregateSweep, comparePaired, distribution } from "./aggregate.js";
 export type { SweepSummary, PairedComparison, DistributionStats } from "./aggregate.js";
@@ -26,6 +30,6 @@ export { buildWorld, elevAt, canopyAt } from "./terrain.js";
 export type { World } from "./terrain.js";
 export { pathAtten } from "./rf.js";
 export type {
-  Side, EventSide, SimEvent, Team, Drone, DfNode, Gcs, Measurement, Estimate,
-  OutcomeResult, OutcomeReason, Vec2,
+  Side, EventSide, Mode, SimEvent, Team, Drone, DroneRole, DroneTrack, DfNode, Gcs, Measurement, Estimate,
+  Objective, OutcomeResult, OutcomeReason, Vec2,
 } from "./types.js";

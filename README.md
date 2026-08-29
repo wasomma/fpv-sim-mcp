@@ -19,7 +19,11 @@ the original developers did by hand during tuning (grid sweeps, 40 seeds per
 cell) packaged as five typed, validated, deterministic tools. The simulation
 core was extracted from the browser file into a headless TypeScript engine
 with **behavior parity proven by golden-master tests**: the same seed
-produces the same engagement, tick for tick, as the browser version.
+produces the same engagement, tick for tick, as the browser version — in
+both of its engagement modes, the original **orbit** plan (one FPV per side
+holds a forward orbit while the DF nodes work) and the **tactical** plan
+(each side flies a package of strike sorties into a shared objective; a
+reserved hunter-killer launches on the GCS fix).
 
 The core lesson is unchanged from the original: **the side that transmits
 less is harder to fix.** An agent with these tools can discover that itself —
@@ -33,7 +37,7 @@ Requires Node 20+.
 git clone https://github.com/wasomma/fpv-sim-mcp.git
 cd fpv-sim-mcp
 npm install
-npm test        # builds and proves browser-parity + unit tests (18 tests)
+npm test        # builds and proves browser-parity (both modes) + unit tests (24 tests)
 npm run demo    # exercises the server through a real MCP stdio client
 ```
 
@@ -87,11 +91,18 @@ build produces — same seed, same engagement, any machine.
 
 | Tool | What it does |
 |---|---|
-| `run_engagement(seed, config_overrides?)` | One full deterministic engagement: winner (or STALEMATE) with reason, duration, phase timeline, per-team fix quality (CEP breakdown), LOB/intercept counts per DF node, key timestamps, and the complete event log. |
-| `sweep_seeds(start_seed, count, config_overrides?)` | Up to 1000 consecutive seeds under one configuration, aggregated server-side: win rates (including stalemates), time-to-fix and time-to-kill distributions, stalemate reasons, and notable seeds to drill into. |
-| `compare_configs(start_seed, count, config_a, config_b, labels?)` | Two CONFIG variants over the **same** seeds (paired design — terrain and emplacement luck cancel out), with per-variant stats, outcome flips, deltas, and a plain-language summary generated from the numbers. |
-| `describe_model()` | The modeling assumptions: DF error model, RF propagation, fix quality gates, drone FSM, EMCON semantics — and the known simplifications an agent must respect before drawing conclusions. |
-| `get_config_schema()` | Every tunable parameter with path, unit, default, and sane range. Generated from the same table that validates inputs, so documentation and enforcement cannot drift. |
+| `run_engagement(seed, mode?, config_overrides?)` | One full deterministic engagement: winner (or STALEMATE) with reason, duration, phase timeline, per-team fix quality (CEP breakdown), LOB/intercept counts per DF node, key timestamps, and the complete event log. In tactical mode also the whole strike package (sorties flown, strikes delivered, every airframe) and the objective. |
+| `sweep_seeds(start_seed, count, mode?, config_overrides?)` | Up to 1000 consecutive seeds under one configuration and mode, aggregated server-side: win rates (including stalemates), time-to-fix and time-to-kill distributions, stalemate reasons, and notable seeds to drill into. |
+| `compare_configs(start_seed, count, config_a, config_b, mode?, labels?)` | Two CONFIG variants over the **same** seeds (paired design — terrain and emplacement luck cancel out), with per-variant stats, outcome flips, deltas, and a plain-language summary generated from the numbers. |
+| `describe_model()` | The modeling assumptions: DF error model, RF propagation, fix quality gates, drone FSM, EMCON semantics, the tactical-mode plan — and the known simplifications an agent must respect before drawing conclusions. |
+| `get_config_schema()` | Every tunable parameter with path, unit, default, and sane range (including the `TACTICAL.*` package knobs). Generated from the same table that validates inputs, so documentation and enforcement cannot drift. |
+
+`mode` is `"orbit"` (default) or `"tactical"`. Both modes share a seed's
+terrain and emplacements; the tactical plan is the sortie stream described in
+[fpv-sim's DESIGN_NOTES.md](https://github.com/wasomma/fpv-sim/blob/main/DESIGN_NOTES.md#tactical-mode)
+(served here as the `fpv-sim://design-notes` resource). Its featured seeds
+are 12, 26, 5, 18, 41 and 14; over seeds 1–200 it splits 27% / 15% / 58%
+(disciplined side / continuous emitter / stalemate).
 
 Resources: `fpv-sim://design-notes` (the original sim's technical write-up)
 and `fpv-sim://mcp-design-notes` (this project's [DESIGN_NOTES.md](DESIGN_NOTES.md)).
@@ -146,8 +157,9 @@ claim was cheap to re-test at 10× the sample size, and it lost.
 
 - **Same seed, same engagement.** All randomness draws from one seeded
   `mulberry32` stream. Golden-master tests prove the extracted engine
-  reproduces the browser version's five featured scenarios exactly — event
-  log string-for-string, end times to the 0.1s tick, fix CEPs float-for-float
+  reproduces the browser version's featured scenarios exactly — five orbit
+  and six tactical — event log string-for-string, end times to the 0.1s
+  tick, fix CEPs and airframe positions float-for-float
   ([DESIGN_NOTES.md](DESIGN_NOTES.md) describes the three-legged
   verification, including a cross-check against the untouched sim in a real
   browser).
@@ -163,7 +175,8 @@ claim was cheap to re-test at 10× the sample size, and it lost.
 ## Repository layout
 
 ```
-src/engine/    headless simulation engine (port of fpv-sim's index.html)
+src/engine/    headless simulation engine (port of fpv-sim's index.html;
+               tactical.ts is the TACTICAL MODE section)
 src/server/    MCP server: five tools, two resources, zod validation;
                build.ts is shared by the stdio (index.ts) and
                Streamable HTTP (http.ts) entry points

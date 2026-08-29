@@ -97,15 +97,17 @@ function mkTeam(meas: Measurement[]): Team {
     launchT: 20, ulPhase: 0, viPhase: 0,
     gcs: { id: "BLUFOR-GCS", x: 0, y: 0, destroyed: false, transmitting: false },
     nodes: [],
-    drone: null as unknown as Team["drone"], // not touched by updateFix
+    drone: null, // not touched by updateFix
     meas,
     est: { p: null, cep: Infinity, s1: 0, s2: 0, ang: 0, solved: false },
     estHist: [],
     flags: { firstLOB: false, crossFix: false, fixed: false, committed: false,
-             acquired: false, dlFirst: false, lowBatt: false, onStation: false },
+             acquired: false, dlFirst: false, lowBatt: false, onStation: false,
+             grounded: false, commitHeld: false },
     flagTimes: {},
     droneTrack: null,
     searchBox: { x: 500, y: 500, w: 1000, h: 1000 }, nai: "NAI 2", holdPt: { x: 0, y: 0 },
+    drones: [], hunter: null, tracks: {}, flown: 0, delivered: 0, pilots: 0, // tactical mode; not touched
   };
 }
 

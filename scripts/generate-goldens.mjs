@@ -3,9 +3,10 @@
  * Golden-fixture generator.
  *
  * Runs the ORIGINAL browser simulation (../fpv-sim/index.html) headless in a
- * Node vm context and records the outcome of each featured scenario seed.
- * The recorded fixtures (test/fixtures/golden-seeds.json) are the parity
- * contract the extracted TypeScript engine is tested against.
+ * Node vm context and records the outcome of each featured scenario seed, in
+ * both engagement modes ("orbit" — the original — and "tactical"). The
+ * recorded fixtures (test/fixtures/golden-seeds.json) are the parity contract
+ * the extracted TypeScript engine is tested against.
  *
  * Two interventions are made to the original source, both provably outside
  * the simulation state/RNG path:
@@ -29,7 +30,12 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 
-const FEATURED_SEEDS = [20260719, 66, 57, 41, 59];
+/* The featured scenarios of each mode (upstream's FEATURED table). Orbit runs
+   come first so the fixture's leading entries keep their historical order. */
+const FEATURED = [
+  ...[20260719, 66, 57, 41, 59].map((seed) => ({ seed, mode: "orbit" })),
+  ...[12, 26, 5, 18, 41, 14].map((seed) => ({ seed, mode: "tactical" })),
+];
 const MAX_SIM_S = 3600;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -78,8 +84,15 @@ const context = vm.createContext({
 
 vm.runInContext(source, context, { filename: "fpv-sim/index.html" });
 
+/*
+ * The run stops at ENDEX: the winner's impact tick, or — tactical mode —
+ * the sim's own STALEMATE (both packages expended, no hunter can launch).
+ * Orbit mode has no self-declared stalemate; the engine ends those runs
+ * headlessly (both drones down / time cap), which the fixture records as
+ * winner null at the cap.
+ */
 const harness = `
-(function (seed, maxT) {
+(function (seed, mode, maxT) {
   "use strict";
   const events = [];
   // Replace the DOM-only logger with a collector. Times are rounded to the
@@ -87,10 +100,10 @@ const harness = `
   addLog = function (side, text) {
     events.push({ t: Math.round(state.t * 10) / 10, side, text });
   };
-  resetSim(seed);
+  resetSim(seed, mode);
   const phases = [{ t: 0, phase: state.phase }];
   let guard = 0;
-  while (!state.winner && state.t < maxT && guard++ < 400000) {
+  while (!state.winner && !state.stalemate && state.t < maxT && guard++ < 400000) {
     stepSim(CONFIG.SIM_DT);
     if (phases[phases.length - 1].phase !== state.phase) {
       phases.push({ t: Math.round(state.t * 10) / 10, phase: state.phase });
@@ -98,7 +111,7 @@ const harness = `
   }
   const team = (side) => {
     const T = state.teams[side];
-    return {
+    const out = {
       lobs: T.meas.length,
       nodes: T.nodes.map((n) => ({ id: n.id, ul_intercepts: n.det, dl_intercepts: n.dl })),
       fix: T.est.solved
@@ -108,29 +121,46 @@ const harness = `
             jitter: T.est.jitter, cutDeg: T.est.cutDeg, balance: T.est.balance,
           }
         : null,
-      drone: { state: T.drone.state, batt: T.drone.batt, x: T.drone.x, y: T.drone.y },
+      drone: T.drone ? { state: T.drone.state, batt: T.drone.batt, x: T.drone.x, y: T.drone.y } : null,
       gcs: { destroyed: T.gcs.destroyed, x: T.gcs.x, y: T.gcs.y },
     };
+    if (mode === "tactical") {
+      out.tactical = {
+        flown: T.flown, delivered: T.delivered, pilots: T.pilots,
+        hunter: T.hunter ? T.hunter.id : null,
+        airframes: T.drones.map((d) => ({
+          id: d.id, role: d.role, sortie: d.sortie, state: d.state, batt: d.batt, x: d.x, y: d.y,
+        })),
+      };
+    }
+    return out;
   };
-  return JSON.stringify({
+  const ended = state.winner || state.stalemate;
+  const out = {
     seed,
+    mode,
     winner: state.winner,
-    endT: state.winner ? Math.round(state.endT * 10) / 10 : null,
+    endT: ended ? Math.round(state.endT * 10) / 10 : null,
     duration: Math.round(state.t * 10) / 10,
     phases,
     teams: { BLUFOR: team("BLUFOR"), OPFOR: team("OPFOR") },
     events,
-  });
+  };
+  if (mode === "tactical") {
+    out.stalemate = !!state.stalemate;
+    out.objective = { x: state.obj.x, y: state.obj.y, r: state.obj.r, name: state.obj.name };
+  }
+  return JSON.stringify(out);
 })
 `;
 const runSeed = vm.runInContext(harness, context, { filename: "harness.js" });
 
 const runs = [];
-for (const seed of FEATURED_SEEDS) {
-  const result = JSON.parse(runSeed(seed, MAX_SIM_S));
+for (const { seed, mode } of FEATURED) {
+  const result = JSON.parse(runSeed(seed, mode, MAX_SIM_S));
   runs.push(result);
   console.log(
-    `seed ${String(seed).padStart(8)} -> ${result.winner ?? "STALEMATE"}` +
+    `${mode.padEnd(8)} seed ${String(seed).padStart(8)} -> ${result.winner ?? "STALEMATE"}` +
     (result.endT !== null ? ` at T+${result.endT}s` : ` (ran ${result.duration}s)`) +
     ` // events: ${result.events.length}`
   );

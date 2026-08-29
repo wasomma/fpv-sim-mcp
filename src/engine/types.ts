@@ -3,7 +3,24 @@ import type { TeamEmconConfig } from "./config.js";
 export type Side = "BLUFOR" | "OPFOR";
 export type EventSide = Side | "SYS";
 
+/*
+ * Engagement plan. "orbit" is the original engagement (one FPV per side
+ * holds a forward orbit while the DF nodes work) and the default; "tactical"
+ * is the multi-FPV sortie stream into a shared objective (see tactical.ts).
+ * Both share terrain, sensors, fix math and the terminal attack run.
+ */
+export type Mode = "orbit" | "tactical";
+
 export interface Vec2 { x: number; y: number; }
+
+/* Noisy position track of an enemy air vehicle from video-downlink intercepts. */
+export interface DroneTrack { x: number; y: number; t: number; }
+
+/* Tactical mode: the contested objective both strike packages fly into. */
+export interface Objective { x: number; y: number; r: number; name: string; }
+
+/* Tactical mode: an airframe is a one-way strike sortie or the hunter-killer. */
+export type DroneRole = "STRIKE" | "HUNTER";
 
 /* One DF intercept: sensor position, noisy bearing, 1-sigma, sim time. */
 export interface Measurement {
@@ -56,6 +73,18 @@ export interface Drone {
   orbitA: number;
   fixReached: boolean;
   searchR: number;
+  /* Tactical mode only (undefined on the orbit-mode drone; see tactical.ts):
+     the airframe's task, its sortie number in the package plan (0 for the
+     reserve hunter), its own EMCON phase offsets, aim point inside the
+     objective, planned launch time, and the per-airframe low-battery latch
+     (orbit mode keeps that latch on the team, TeamFlags.lowBatt). */
+  role?: DroneRole;
+  sortie?: number;
+  ulPhase?: number;
+  viPhase?: number;
+  aim?: Vec2 | null;
+  planT?: number | null;
+  lowBatt?: boolean;
 }
 
 /* Least-squares fix estimate. Solved estimates carry the full quality
@@ -83,6 +112,9 @@ export interface TeamFlags {
   dlFirst: boolean;
   lowBatt: boolean;
   onStation: boolean;
+  /* Tactical mode only. */
+  grounded: boolean;    // own GCS destroyed: package grounded (logged once)
+  commitHeld: boolean;  // hunter commit waiting for a free pilot station
 }
 
 /* Sim times at which each flag was first set (headless addition — the
@@ -101,17 +133,29 @@ export interface Team {
   viPhase: number;
   gcs: Gcs;
   nodes: DfNode[];
-  drone: Drone;
+  /* Orbit mode: the side's single FPV. Null in tactical mode, where the
+     package lives in `drones` (upstream sets T.drone = null there too). */
+  drone: Drone | null;
   // Collection effort against the enemy GCS.
   meas: Measurement[];
   est: Estimate;
   estHist: { x: number; y: number; t: number }[];
   flags: TeamFlags;
   flagTimes: FlagTimes;
-  droneTrack: { x: number; y: number; t: number } | null; // noisy track of enemy drone from DL intercepts
+  droneTrack: DroneTrack | null; // orbit mode: noisy track of the enemy drone from DL intercepts
   searchBox: SearchBox;
   nai: string;
-  holdPt: Vec2;
+  holdPt: Vec2;                  // orbit mode; not computed in tactical mode
+  /* Tactical mode only (see tactical.ts): the strike package (plus the
+     reserve), the hunter-killer (the reserve, or the retasked airframe), one
+     DL track per enemy airframe id, sortie counters, and the pilot-station
+     cap (max airframes airborne at once, one C2 link each). */
+  drones: Drone[];
+  hunter: Drone | null;
+  tracks: Record<string, DroneTrack>;
+  flown: number;
+  delivered: number;
+  pilots: number;
 }
 
 export interface SimEvent {
@@ -121,4 +165,10 @@ export interface SimEvent {
 }
 
 export type OutcomeResult = Side | "STALEMATE";
-export type OutcomeReason = "gcs_destroyed" | "both_drones_down" | "time_limit";
+/*
+ * gcs_destroyed: a side won. both_drones_down (orbit) / packages_expended
+ * (tactical): the engagement can no longer change — no emitter or striker is
+ * left; tactical mode declares this itself ("ENDEX // STALEMATE"), orbit mode
+ * only headlessly. time_limit: the headless sim-time cap.
+ */
+export type OutcomeReason = "gcs_destroyed" | "both_drones_down" | "packages_expended" | "time_limit";
