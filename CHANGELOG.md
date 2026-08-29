@@ -19,6 +19,16 @@ kill, 8.8 s later, plus the new search-start log line). Parity re-verified
 against the vm-run browser sim over seeds 1–500, both modes,
 float-for-float.
 
+### Added
+- **Consumable as a git dependency.** `"prepare": "npm run build"` builds
+  `dist/` automatically when the package is installed from a git URL
+  (`npm install github:wasomma/fpv-sim-mcp#<sha>`), a new `"./server"`
+  export exposes `buildServer()`/`SERVER_VERSION` (the composition point
+  for hosts that register extra tools on the same server), and
+  `test/fixtures` ships in the package so downstream consumers — the
+  planned fpv-sim-app desktop host — can run an engine-parity smoke test
+  against the committed goldens. No engine or tool changes.
+
 ### Changed
 - **Bounded terminal search and AO-edge-aware steering**, mirroring
   upstream `index.html`: a no-joy terminal search is now an expanding

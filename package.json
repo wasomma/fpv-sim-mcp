@@ -17,14 +17,17 @@
   },
   "exports": {
     ".": "./dist/src/server/index.js",
-    "./engine": "./dist/src/engine/index.js"
+    "./engine": "./dist/src/engine/index.js",
+    "./server": "./dist/src/server/build.js"
   },
   "files": [
     "dist/src",
-    "docs"
+    "docs",
+    "test/fixtures"
   ],
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "test": "tsc && node --test dist/test/*.test.js",
     "demo": "tsc && node dist/examples/demo.js",
     "goldens": "node scripts/generate-goldens.mjs",
